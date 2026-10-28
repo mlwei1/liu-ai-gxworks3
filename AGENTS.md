@@ -1,7 +1,8 @@
 # AGENTS.md — 给打开本仓库的 AI agent 的操作手册
 
 > 本文件面向**读取本仓库的 AI agent**（Claude Desktop / DeepSeek Harness / Cursor / Codex 等）。
-> 人类用户请先看 [README.md](README.md)。技能包入口：[skills/gx3gen-plc/SKILL.md](skills/gx3gen-plc/SKILL.md)；
+> 人类用户请先看 [START_HERE.md](START_HERE.md)（5 分钟上手）或 [README.md](README.md)。
+> 技能包入口：[skills/gx3gen-plc/SKILL.md](skills/gx3gen-plc/SKILL.md)；
 > 纯对话主流程：[docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md)；协议级示例：[docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)。
 
 ## 0. 这是什么
@@ -213,6 +214,7 @@ GX Works3 落地：打开基座工程副本 → MAIN 程序内 [编辑]→[导�
 
 ## 8. 相关文件
 
+- [START_HERE.md](START_HERE.md)：**人类用户 5 分钟上手**（[English](START_HERE.en.md)）
 - [README.md](README.md)：产品定位、快速开始、当前边界
 - [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md)：**纯对话主流程**（生成/学风格/纠正/落地）
 - [skills/gx3gen-plc/SKILL.md](skills/gx3gen-plc/SKILL.md)：技能包（触发词/路由/工作流/质量/常见错误）

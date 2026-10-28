@@ -2,6 +2,9 @@
 
 **English** | [中文](README.md)
 
+> **First time here?** Start with [START_HERE.en.md](START_HERE.en.md) (5-minute first run).
+> **No API key, no web UI, and MCP is optional.**
+
 > Agent-first toolkit for **Mitsubishi FX5U + GX Works3 1.082** PLC programming:
 > turn a Chinese/English requirement + IO list (+ your existing programming style) into a
 > **readable, editable, GX Works3-importable** ladder program draft
@@ -14,8 +17,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Recommended way to use it:** clone/download this repository → open it with an AI agent
-(Claude Code / DeepSeek Harness / Cursor / Codex …) → connect the agent to the bundled MCP server →
-the agent writes the structured `ProgramSpec`, validates it, generates the CSV files and reports the
+(Claude Code / DeepSeek Harness / Cursor / Codex …) → optionally connect the agent to the bundled
+MCP server → the agent writes the structured `ProgramSpec`, validates it, generates the CSV files and reports the
 results. You only describe the requirement and provide the IO list.
 
 > **No API key required.** The AI coding tool that opens this repository already has a model — that is
@@ -216,6 +219,7 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 
 ```
 .
+├── START_HERE.md / .en.md    # first run in 5 minutes
 ├── AGENTS.md                 # Agent handbook (rules, workflow, quality red lines, tool table)
 ├── README.md / README.en.md  # Chinese / English docs
 ├── run.py / run_mcp.py       # CLI entry / MCP stdio entry
@@ -264,6 +268,7 @@ config, and needs no API key.**
 
 ## More docs
 
+- [START_HERE.en.md](START_HERE.en.md) — **first run in 5 minutes**
 - [AGENTS.md](AGENTS.md) — agent instructions
 - [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md) — **pure-chat main flow** (generation / style import / corrections / landing)
 - [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) — protocol-level example + MCP setup

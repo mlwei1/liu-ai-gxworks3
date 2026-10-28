@@ -2,6 +2,9 @@
 
 [English](README.en.md) | **中文**
 
+> **第一次使用？** 先看 [START_HERE.md](START_HERE.md)：下载后 5 分钟跑通一次示例。
+> **不需要 API Key、不需要打开网页、不强制配置 MCP。**
+
 > 面向 **三菱 FX5U + GX Works3 1.082** 的 agent-first PLC 编程工具包：
 > 把「中文需求 + IO 表 + 你自己的编程风格」变成一版**可读、可改、可在 GX Works3 导入**的
 > 设备段 + SFC(STL) 梯形图程序初稿（程序本体 CSV + 软元件注释 CSV + 网络表 + 生成报告）。
@@ -13,8 +16,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **推荐用法：下载/克隆本仓库 → 用 AI agent（Claude Code / DeepSeek Harness / Cursor / Codex…）打开 →
-把 agent 连到内置 MCP server → agent 自己写 `ProgramSpec`、校验、生成 CSV 并汇报结果。
-用户只需要用中文描述需求、提供 IO 表。**
+（可选）把 agent 连到内置 MCP server → agent 自己写 `ProgramSpec`、校验、生成 CSV 并汇报结果。
+用户只需要用中文描述需求、提供 IO 表。MCP 配不上时，agent 也能直接用 CLI 完成。**
+
+> **第一次使用请先看 [START_HERE.md](START_HERE.md)**：从跑通示例到 GX 导入的完整上手流程。
 
 > **不需要 API Key。** 打开仓库的 AI 编程工具本身自带模型，它才是"写程序的 AI"；
 > 本项目不内置 LLM 调用，只提供契约（ProgramSpec）、工具（MCP/CLI）、质量门槛和确定性编译器。
@@ -211,6 +216,7 @@ python run.py seed-demo      # 创建一个三工位示例项目
 
 ```
 .
+├── START_HERE.md / .en.md    # 新手上路：下载后 5 分钟跑通
 ├── AGENTS.md                 # AI agent 操作手册（铁律/工作流/质量红线/工具表）
 ├── README.md / README.en.md  # 中文 / English
 ├── run.py / run_mcp.py       # CLI 入口 / MCP stdio 入口
@@ -257,6 +263,7 @@ MCP 协议/工具测试。
 
 ## 更多文档
 
+- [START_HERE.md](START_HERE.md) — **新手上路：下载后 5 分钟跑通**
 - [AGENTS.md](AGENTS.md) — agent 操作手册
 - [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md) — **纯对话主流程**（生成/学风格/纠正/落地）
 - [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) — 完整示例会话 + MCP 配置
