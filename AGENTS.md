@@ -2,7 +2,7 @@
 
 > 本文件面向**读取本仓库的 AI agent**（Claude Desktop / DeepSeek Harness / Cursor / Codex 等）。
 > 人类用户请先看 [README.md](README.md)。技能包入口：[skills/gx3gen-plc/SKILL.md](skills/gx3gen-plc/SKILL.md)；
-> 完整示例会话：[docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)。
+> 纯对话主流程：[docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md)；协议级示例：[docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)。
 
 ## 0. 这是什么
 
@@ -43,6 +43,8 @@ gx3gen 是面向**三菱 FX5U + GX Works3 1.082** 的 PLC 程序初稿生成器�
 3. **配置 AI 客户端连上 MCP server**：把 `mcp.json.example` 复制到客户端配置并改成绝对路径，
    命令是 `python <repo>/run_mcp.py`（stdio MCP，零依赖；stdout 只输出协议 JSON）。
 4. **agent 开始生成程序**：走第 3 节工作流，用户只需要用中文描述需求、提供 IO 表。
+   **主流程是纯对话**：不要要求用户打开 Web 界面，也不要索要 API Key；
+   Web 界面只是实验性的可选审阅面（见 [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md)）。
 
 没有 MCP 能力时，退化为 CLI/Python API：
 
@@ -82,9 +84,10 @@ gx3gen_validate_spec({"spec": <你的 spec>, "requirement": "<需求原文>"})
 
 **Step 4 保存项目（可选，推荐）**
 
-如果用户希望项目可回看/可在 Web 软件里审阅，先用 `gx3gen_create_project({name, requirement, io})` 建项目，
+如果用户希望项目可回看/可多轮继续（推荐），先用 `gx3gen_create_project({name, requirement, io})` 建项目，
 再 `gx3gen_save_spec({project_id, spec, requirement})` 写入 workspace（同时生成 `spec.json`）。
-之后可用 `gx3gen_load_spec` / `gx3gen_list_projects` 继续工作；Web 软件读取同一份项目与 spec。
+之后可用 `gx3gen_load_spec` / `gx3gen_list_projects` 继续工作。
+项目文件就是状态；可选的实验性 Web 界面读取同一份项目与 spec，但它不是主流程。
 
 **Step 5 生成**
 
@@ -152,7 +155,7 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 |---|---|
 | `quality.ok=false` / `QualityError` | 按 `quality.errors` 补相位、定时器、启停、动作；不要删除检查项 |
 | `SpecError: xxx 必须是 ...` | 按错误路径改 spec：cpu 必须 `FX5U`、设备号合法、step 同段递增、segments 非空 |
-| `gx3gen_create_project` / `save_spec` 报项目不存在 | 先 `create_project` 拿 `project_id`，再保存；项目与 Web 共用 `<repo>/workspace` |
+| `gx3gen_create_project` / `save_spec` 报项目不存在 | 先 `create_project` 拿 `project_id`，再保存；项目文件在 `<repo>/workspace`，可选 Web 仅实验性读取 |
 | `未知工具 / Method not found` | 检查 MCP 客户端是否连到本项目 `run_mcp.py`；工具名以第 5 节为准 |
 | 产物路径不存在 | 检查 `out_dir` / `GX3GEN_WORKSPACE` 写权限；默认落在 `<repo>/workspace/out/` |
 | 用户要求“保证能编译” | 说明初稿边界：CSV 需在 GX Works3 导入→全部转换→修错，编译验证由工程师完成 |
@@ -175,6 +178,7 @@ GX Works3 落地：打开基座工程副本 → MAIN 程序内 [编辑]→[导�
 ## 8. 相关文件
 
 - [README.md](README.md)：产品定位、快速开始、当前边界
+- [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md)：**纯对话主流程**（生成/学风格/纠正/落地）
 - [skills/gx3gen-plc/SKILL.md](skills/gx3gen-plc/SKILL.md)：技能包（触发词/路由/工作流/质量/常见错误）
 - [skills/gx3gen-plc/references/program_spec.md](skills/gx3gen-plc/references/program_spec.md)：ProgramSpec 字段说明
 - [skills/gx3gen-plc/references/quality_checklist.md](skills/gx3gen-plc/references/quality_checklist.md)：质量检查清单

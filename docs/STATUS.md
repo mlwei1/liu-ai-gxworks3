@@ -1,6 +1,17 @@
 # 实现状态（2026-10-28）
 
-## 最新修正：agent 是唯一 LLM（2026-10-28 下午）
+## 最新修正：纯对话优先（2026-10-28 晚）
+
+产品主流程收敛为**用户与 AI agent 纯对话**，Web 界面不再是需要打开的入口：
+
+- 新增 [docs/CHAT_WORKFLOW.md](CHAT_WORKFLOW.md)：生成 / 导入自己程序学风格 / 纠正 / GX 落地 的完整对话流程；
+- README（中/英）快速开始改为 pure-chat；Web 界面降级为"实验性（非主流程）"，从 Quick Start 移到附录；
+- AGENTS.md 明确：**不要要求用户打开 Web 界面、不要索要 API Key**；项目可用 `create_project`/`save_spec` 持久化；
+- Web 首页加"实验性/可选审阅界面"提示，并补 `web/README.md` 说明；
+- 架构/接口/AGENT_WORKFLOW 文档同步标注 app/ 层为实验性可选；
+- 代码生成/质量/测试逻辑未改，仍为 **147 tests OK**。
+
+## 修正：agent 是唯一 LLM（2026-10-28 下午）
 
 产品定位修正：**用 AI agent 打开项目时，agent 自带模型；项目不调用 LLM、不需要 API Key。**
 已完成：
@@ -32,7 +43,7 @@
 | AI Agent 接入 | `run_mcp.py`、`src/gx3gen/mcp_server.py`、`AGENTS.md`、`skills/gx3gen-plc/` | ✅ MCP 12 工具：generation_context / validate / generate / create_project / save_spec / load_spec / list_projects / examples / styles / import_style / feedback / lessons（**无项目内 LLM/规划工具**） |
 | 领域模板 | `src/gx3gen/domains.py` | ✅ 双向红绿灯（25/3/2/20/3/2 默认时长；灯位按注释匹配，缺失自动分配 Y0–Y5） |
 | 质量门槛 | `src/gx3gen/quality.py` | ✅ 结构检查 + 需求红线；`generator.generate(requirement=...)` 硬 gate；`force` 可强制 |
-| 本地 Web 软件 | `src/gx3gen/app/`、`web/` | ✅ 审阅/可视化/反馈/风格/产物浏览；「本地 LLM」为可选独立模式（agent 模式不需要） |
+| 实验性 Web 审阅界面 | `src/gx3gen/app/`、`web/` | ⚗️ 非主流程：审阅/可视化/反馈/产物浏览；「本地 LLM」为可选独立模式（agent 模式不需要） |
 | ProgramSpec 契约 | `src/gx3gen/spec.py`、`spec/program_spec.schema.json` | ✅ 校验、IO 表解析、设备查找 |
 | 生成器 | `src/gx3gen/generator/` | ✅ spec → 段/STL → IL → CSV/注释/网络表/报告/轻量检查 |
 | 程序本体 CSV | `src/gx3gen/ilcsv/` | ✅ UTF-16LE+BOM/TAB/QUOTE_ALL/CRLF/7 列/END；读/写/解析 |

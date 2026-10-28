@@ -41,7 +41,7 @@ results. You only describe the requirement and provide the IO list.
 | **Deterministic compiler** | [`src/gx3gen/generator/`](src/gx3gen/generator/), [`src/gx3gen/ilcsv/`](src/gx3gen/ilcsv/) | `ProgramSpec` → segments/STL → IL → official GX CSV (UTF-16LE+BOM, TAB, QUOTE_ALL, CRLF, 7 cols, END) |
 | **Style learning** | [`src/gx3gen/style/`](src/gx3gen/style/) | Learn segment structure, step ranges, mode bits, alarms, handshake naming from your own GX CSVs |
 | **Feedback loop** | [`src/gx3gen/feedback/`](src/gx3gen/feedback/) | User corrections → lessons / checklist / prompt hints → used in the next generation |
-| **Local web UI** | [`src/gx3gen/app/`](src/gx3gen/app/), [`web/`](web/) | Optional: review / visualize / feedback / style / artifact browser (no API key needed; not required in agent mode) |
+| **Local web UI (experimental)** | [`src/gx3gen/app/`](src/gx3gen/app/), [`web/`](web/) | **Not the main flow**: optional review/visualization/artifact browser; pure-chat users never need it, and it needs no API key |
 | **CLI** | [`src/gx3gen/cli.py`](src/gx3gen/cli.py), [`run.py`](run.py) | Headless batch/automation |
 
 ![pipeline](docs/architecture.svg)
@@ -52,7 +52,7 @@ results. You only describe the requirement and provide the IO list.
 
 - Windows with Mitsubishi **GX Works3 1.082** installed (for actual import/compile; generation itself does not need it)
 - **Python 3.9+**, **no third-party packages** (standard library only; `pytest` is not required)
-- Any MCP-capable AI client for the recommended agent workflow (or use the CLI/web UI directly)
+- Any MCP-capable AI client for the recommended pure-chat workflow (CLI is the fallback when MCP is unavailable)
 
 ---
 
@@ -87,8 +87,8 @@ python -m unittest discover -s tests -t .     # 147 tests, no network
    → `gx3gen_validate_spec` → iterate on `quality.errors` → `gx3gen_generate_program`
    → report artifacts, quality, assumptions and GX Works3 landing steps.
 4. Answer follow-up questions (timings, IO addresses, interlocks). The agent must not invent devices.
-5. For review/diff/feedback, open the optional local web UI; it reads the same
-   `workspace/projects/<id>/spec.json` written by the agent.
+5. Pure chat is enough for the whole loop; **you do not need to open a web UI**. If you want human
+   review/diff/download, the experimental web UI reads the same `workspace/projects/<id>/spec.json`.
 
 Available MCP tools:
 
@@ -97,7 +97,7 @@ Available MCP tools:
 | `gx3gen_get_generation_context` | Required first read: ProgramSpec schema, architecture defaults, quality red lines, examples, IO, style summary, lessons |
 | `gx3gen_validate_spec` | Validate structure + run the quality gate |
 | `gx3gen_generate_program` | Generate the 4 artifacts (program CSV, comment CSV, network table, report) |
-| `gx3gen_create_project` / `gx3gen_save_spec` / `gx3gen_load_spec` / `gx3gen_list_projects` | Project + `spec.json` handoff (agent and web UI share the same workspace) |
+| `gx3gen_create_project` / `gx3gen_save_spec` / `gx3gen_load_spec` / `gx3gen_list_projects` | Project + `spec.json` handoff (agent and optional web UI share the same workspace) |
 | `gx3gen_get_examples` | Traffic-light / three-station examples |
 | `gx3gen_list_styles` / `gx3gen_import_style` | Manage style profiles learned from your GX CSVs |
 | `gx3gen_add_feedback` / `gx3gen_get_lessons` | Feedback loop |
@@ -105,34 +105,33 @@ Available MCP tools:
 > The MCP toolset contains **no in-project LLM/planning tool**: the agent is the planner;
 > MCP never reads API keys and makes no network calls.
 
-See [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) for a full example session.
+Pure-chat workflow (generation / style import / corrections / GX landing): [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md).
+Protocol-level example: [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md).
 
-### B. Local web UI (optional)
-
-```bash
-python run.py serve          # open http://127.0.0.1:8765
-python run.py seed-demo      # create a sample project (three-station pick & place)
-```
-
-Purpose: a human review / visualization / feedback / style / artifact browser — **not** the primary
-generation entry point.
-
-- Open an agent-created project to review its spec, generated artifacts and feedback; no API key needed.
-- Requirement input and "rule parsing" remain available (offline, includes the traffic-light template).
-- "Local LLM parsing" is an **optional** non-agent mode (OpenAI-compatible endpoint in Settings);
-  it is not needed in agent mode.
-- Unrecognized natural language returns a clear error with rewriting suggestions instead of junk output.
-
-### C. CLI
+### B. CLI (fallback when there is no MCP)
 
 ```bash
 python run.py plan --req samples/traffic_light.requirement.md --io samples/traffic_light.io.csv --out out/spec.json
 python run.py gen  --spec out/spec.json --out ./out-demo
 python run.py style import --program-csv "program.csv" --comment-csv "comments.csv" --name "MyStyle"
-python run.py serve
 ```
 
-> `plan --llm` is an optional non-agent mode; in agent mode the agent writes the ProgramSpec itself.
+> `plan` uses rules/domain templates by default; `plan --llm` is an optional non-agent mode.
+> In agent mode the agent writes the ProgramSpec itself.
+
+### C. Experimental: local web review UI (not the main flow)
+
+> **Not required for the main flow; no API key needed.** This layer is only for human review,
+> diff, CSV download and feedback capture. Pure-chat users can skip it entirely; it can be removed later.
+
+```bash
+python run.py serve          # open http://127.0.0.1:8765
+python run.py seed-demo      # create a sample project
+```
+
+- Open an agent-created project to review its spec, generated artifacts and feedback.
+- Requirement input and "rule parsing" remain available as an offline fallback.
+- "Local LLM parsing" is an optional standalone mode; it is not part of the agent flow.
 
 ---
 
@@ -196,7 +195,7 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 ├── spec/                     # ProgramSpec / StyleProfile JSON schemas
 ├── samples/                  # three-station + two-way traffic-light examples
 ├── src/gx3gen/               # Python package (planner, generator, ilcsv, style, feedback, app, MCP)
-├── web/                      # single-page web UI (no build, no CDN)
+├── web/                      # experimental single-page review UI (no build, no CDN; not the main flow)
 ├── tests/                    # 147 unittest cases
 └── workspace/                # runtime data (projects/styles/artifacts; git-ignored)
 ```
@@ -233,7 +232,8 @@ config, and needs no API key.**
 ## More docs
 
 - [AGENTS.md](AGENTS.md) — agent instructions
-- [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) — full example session + MCP setup
+- [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md) — **pure-chat main flow** (generation / style import / corrections / landing)
+- [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) — protocol-level example + MCP setup
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture
 - [docs/PRODUCT_LOOP.md](docs/PRODUCT_LOOP.md) — product loop
 - [docs/CSV_FORMAT.md](docs/CSV_FORMAT.md) — GX Works3 CSV format

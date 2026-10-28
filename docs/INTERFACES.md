@@ -202,7 +202,9 @@ def apply_lessons(project: dict) -> dict
     # 返回 {"spec": spec, "checklist": [str], "prompt_hint": str}
 ```
 
-## gx3gen.app
+## gx3gen.app（实验性可选审阅界面）
+
+> 不属于主流程；纯对话用户不需要启动。见 [docs/CHAT_WORKFLOW.md](CHAT_WORKFLOW.md)。
 
 `server.py`：
 

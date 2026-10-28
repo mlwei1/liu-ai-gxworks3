@@ -2,6 +2,7 @@
 
 本文件给「打开本仓库的 AI agent」提供可直接照做的端到端流程。前置阅读：
 [AGENTS.md](../AGENTS.md)（铁律/工作流）、[skills/gx3gen-plc/SKILL.md](../skills/gx3gen-plc/SKILL.md)（技能路由）。
+**纯对话主流程（推荐先看）**：[docs/CHAT_WORKFLOW.md](CHAT_WORKFLOW.md)；本文件是更偏协议层的示例。
 
 ## 1. 前提
 
@@ -85,7 +86,7 @@ cd <repo>
 ```
 
 `save_spec` 会写 `project.json` 与 `workspace/projects/<id>/spec.json`，并返回结构校验/质量结果；
-本地 Web 软件读取同一份项目，可直接审阅、反馈、下载产物。
+可选的**实验性** Web 审阅界面读取同一份项目（非主流程，纯对话不需要打开）。
 
 ### Agent 第 2 步：你产出 ProgramSpec（不要让用户写）
 

@@ -36,7 +36,7 @@
 | **确定性编译器** | [`src/gx3gen/generator/`](src/gx3gen/generator/)、[`src/gx3gen/ilcsv/`](src/gx3gen/ilcsv/) | `ProgramSpec` → 段/STL → IL → 官方 GX CSV（UTF-16LE+BOM、TAB、QUOTE_ALL、CRLF、7 列、END） |
 | **风格学习** | [`src/gx3gen/style/`](src/gx3gen/style/) | 从你 GX 导出的程序/注释 CSV 学段结构、步号段、模式位、报警基址、握手命名 |
 | **反馈闭环** | [`src/gx3gen/feedback/`](src/gx3gen/feedback/) | 用户纠错 → lessons / checklist / prompt hints → 下一轮生成自动规避 |
-| **本地 Web UI** | [`src/gx3gen/app/`](src/gx3gen/app/)、[`web/`](web/) | 可选：审阅/可视化/反馈/风格/产物浏览（AI agent 模式不需要；启动它也不需要 API Key） |
+| **本地 Web UI（实验性）** | [`src/gx3gen/app/`](src/gx3gen/app/)、[`web/`](web/) | **非主流程**：可选审阅/可视化/产物浏览；纯对话模式不需要打开，也不需要 API Key |
 | **CLI** | [`src/gx3gen/cli.py`](src/gx3gen/cli.py)、[`run.py`](run.py) | 批量、回归、集成 |
 
 ![pipeline](docs/architecture.svg)
@@ -87,7 +87,7 @@ python -m unittest discover -s tests -t .     # 147 个测试，无网络
    → `gx3gen_validate_spec` → 按 `quality.errors` 迭代 → `gx3gen_generate_program`
    → 汇报产物、质量、assumptions 与 GX 落地步骤。
 4. agent 会就不清楚的工艺/IO/互锁**问你**；不会凭空发明设备号。
-5. 需要审阅/对比/反馈时，打开本地 Web 界面（可选），它会读取 agent 写入的同一份 `workspace/projects/<id>/spec.json`。
+5. 纯对话即可完成全部流程；**不需要打开 Web 界面**。若想人工审阅/对比/下载，可选启动实验性 Web 界面，它会读取 agent 写入的同一份 `workspace/projects/<id>/spec.json`。
 
 MCP 工具：
 
@@ -103,32 +103,33 @@ MCP 工具：
 
 > MCP 工具集里**没有**项目内 LLM/规划工具：agent 自己就是规划器，MCP 不读 API Key、不联网。
 
-完整示例会话见 [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)。
+完整对话流程（含导入风格/纠正/落地）见 [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md)；
+更细的协议级示例见 [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)。
 
-### B. 本地 Web 界面（可选）
+### B. CLI（没有 MCP 时的兜底）
+
+```bash
+python run.py plan --req samples/traffic_light.requirement.md --io samples/traffic_light.io.csv --out out/spec.json
+python run.py gen  --spec out/spec.json --out ./out-demo
+python run.py style import --program-csv "程序本体.csv" --comment-csv "全局软元件注释.csv" --name "我的风格"
+```
+
+> `plan` 默认使用规则/领域模板；`plan --llm` 是可选的非 agent 模式。agent 模式下由 agent 自己产出
+> ProgramSpec，不需要 Key。
+
+### C. 实验性：本地 Web 审阅界面（非主流程）
+
+> **主流程不需要它，也不需要打开网页。** 这一层仅用于人工审阅/对比/下载/记录反馈；
+> 如果只想走纯对话，可以完全不启动、后续也可以移除。
 
 ```bash
 python run.py serve          # 浏览器打开 http://127.0.0.1:8765
 python run.py seed-demo      # 创建一个三工位示例项目
 ```
 
-定位：**审阅 / 可视化 / 反馈 / 风格管理 / 产物浏览**的人机界面，**不是**主生成入口。
-
-- 打开 agent 创建的项目即可审阅 spec、生成结果、下载 CSV、记录反馈；这一过程不需要任何 API Key。
-- 需求/IO 输入和「规则解析」仍保留（离线可用，内置双向红绿灯等模板）。
-- 「本地 LLM 解析」是**可选**的非 agent 模式（在设置里配置 OpenAI 兼容接口），agent 模式下完全不需要。
-- 无法解析的自然语言会**明确报错并给改写建议**，不再输出"没有自动流程、只有几个空 STL 步"的垃圾初稿。
-
-### C. CLI
-
-```bash
-python run.py plan --req samples/traffic_light.requirement.md --io samples/traffic_light.io.csv --out out/spec.json
-python run.py gen  --spec out/spec.json --out ./out-demo
-python run.py style import --program-csv "程序本体.csv" --comment-csv "全局软元件注释.csv" --name "我的风格"
-python run.py serve
-```
-
-> `plan --llm` 是可选的非 agent 模式；agent 模式下由 agent 自己产出 ProgramSpec，不需要 Key。
+- 打开 agent 创建的项目即可审阅 spec、生成结果、下载 CSV、记录反馈；不需要任何 API Key。
+- 需求/IO 输入和「规则解析」保留作离线兜底；「本地 LLM」是可选的独立模式。
+- 页面上会显示"实验性"提示；它不是产品主入口。
 
 ---
 
@@ -191,7 +192,7 @@ python run.py serve
 ├── spec/                     # ProgramSpec / StyleProfile JSON Schema
 ├── samples/                  # 三工位 + 双向红绿灯示例
 ├── src/gx3gen/               # Python 包（planner/generator/ilcsv/style/feedback/app/mcp）
-├── web/                      # 单页 Web UI（无构建、无 CDN）
+├── web/                      # 实验性单页审阅界面（无构建、无 CDN；非主流程）
 ├── tests/                    # 147 个 unittest
 └── workspace/                # 运行时数据（项目/风格/产物，已 gitignore）
 ```
@@ -226,6 +227,7 @@ python -m unittest discover -s tests -t .
 ## 更多文档
 
 - [AGENTS.md](AGENTS.md) — agent 操作手册
+- [docs/CHAT_WORKFLOW.md](docs/CHAT_WORKFLOW.md) — **纯对话主流程**（生成/学风格/纠正/落地）
 - [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) — 完整示例会话 + MCP 配置
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 架构
 - [docs/PRODUCT_LOOP.md](docs/PRODUCT_LOOP.md) — 产品闭环
