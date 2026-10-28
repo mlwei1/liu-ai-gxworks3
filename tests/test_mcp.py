@@ -23,7 +23,10 @@ REQUIRED_TOOLS = {
     "gx3gen_get_generation_context",
     "gx3gen_validate_spec",
     "gx3gen_generate_program",
-    "gx3gen_plan",
+    "gx3gen_create_project",
+    "gx3gen_save_spec",
+    "gx3gen_load_spec",
+    "gx3gen_list_projects",
     "gx3gen_get_examples",
     "gx3gen_list_styles",
     "gx3gen_import_style",
@@ -377,28 +380,62 @@ class McpServerTest(unittest.TestCase):
         self.assertIn("traffic_light", payload["examples"])
         self.assertIn("three_station", payload["examples"])
 
-    def test_17_plan_returns_spec(self):
-        result, text = self.client.call_tool("gx3gen_plan", {
-            "requirement": (
-                "初始化:\n  SM402 置位 S0\n"
-                "取放站:\n  步号段 100-199\n  竖直缸(Y0)下降\n  到位(X3) -> 夹紧(Y2)\n  到位(X7) -> 延时2s\n"
-            ),
-            "io": [
-                {"device": "X0", "comment": "启动", "role": "input"},
-                {"device": "X1", "comment": "停止", "role": "input"},
-                {"device": "X3", "comment": "竖直缸到位", "role": "input"},
-                {"device": "X7", "comment": "夹爪到位", "role": "input"},
-                {"device": "Y0", "comment": "竖直缸", "role": "output"},
-                {"device": "Y2", "comment": "夹爪", "role": "output"},
-            ],
+    def test_17_tool_list_excludes_inproject_planner(self):
+        response = self.client.request("tools/list", {})
+        names = {tool.get("name") for tool in (response.get("result") or {}).get("tools") or []}
+        # agent-first：agent 自己是 LLM；MCP 不再提供会调用项目内 LLM 的 plan 工具
+        self.assertNotIn("gx3gen_plan", names)
+        self.assertIn("gx3gen_create_project", names)
+        self.assertIn("gx3gen_save_spec", names)
+
+    def test_17b_project_spec_handoff(self):
+        traffic_spec = json.loads(
+            (REPO_ROOT / "samples" / "traffic_light.spec.json").read_text(encoding="utf-8"))
+        requirement = (REPO_ROOT / "samples" / "traffic_light.requirement.md").read_text(
+            encoding="utf-8")
+        create, create_text = self.client.call_tool("gx3gen_create_project", {
+            "name": "MCP 交接项目",
+            "requirement": requirement,
+            "io": traffic_spec["io"],
         })
-        payload = _parse_json(text)
-        self.assertFalse(result.get("isError"), payload)
+        payload = _parse_json(create_text)
+        self.assertFalse(create.get("isError"), payload)
         self.assertTrue(payload.get("ok"), payload)
-        spec = payload.get("spec") or {}
-        self.assertTrue(spec.get("segments"), payload)
-        self.assertIn("planner", payload)
-        self.assertIn(payload["planner"].get("engine"), ("deterministic", "plan_with_quality"))
+        project_id = payload["project_id"]
+        self.assertTrue(project_id)
+        self.assertTrue(payload.get("spec_path"))
+
+        save, save_text = self.client.call_tool("gx3gen_save_spec", {
+            "project_id": project_id,
+            "requirement": requirement,
+            "spec": traffic_spec,
+        })
+        saved = _parse_json(save_text)
+        self.assertFalse(save.get("isError"), saved)
+        self.assertTrue(saved.get("ok"), saved)
+        self.assertTrue(saved.get("valid"), saved)
+        self.assertTrue(saved.get("quality_ok"), saved)
+        self.assertTrue(Path(saved["spec_path"]).exists())
+
+        load, load_text = self.client.call_tool("gx3gen_load_spec", {"project_id": project_id})
+        loaded = _parse_json(load_text)
+        self.assertFalse(load.get("isError"), loaded)
+        self.assertTrue(loaded.get("ok"), loaded)
+        self.assertEqual(loaded["spec"]["project"]["name"], traffic_spec["project"]["name"])
+
+        listed, list_text = self.client.call_tool("gx3gen_list_projects", {})
+        projects = _parse_json(list_text)
+        self.assertFalse(listed.get("isError"), projects)
+        self.assertTrue(any(item.get("id") == project_id for item in projects.get("projects") or []))
+
+    def test_17c_generation_context_has_no_api_key_requirement(self):
+        _result, text = self.client.call_tool("gx3gen_get_generation_context", {
+            "requirement": "双向红绿灯",
+        })
+        lowered = text.lower()
+        self.assertNotIn("api_key", lowered)
+        self.assertNotIn("gx3gen_plan", lowered)
+        self.assertIn("programspec", lowered)
 
     def test_18_list_styles(self):
         result, text = self.client.call_tool("gx3gen_list_styles", {})

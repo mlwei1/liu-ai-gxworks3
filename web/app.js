@@ -964,11 +964,17 @@ async function doPlan(useLlm) {
   switchStep('plan');
   const quality = data.quality || {};
   const qualityErrors = quality.errors || [];
+  const planner = data.planner || '';
   if (qualityErrors.length) {
     showBanner('规划完成但质量检查未通过：\n- ' + qualityErrors.join('\n- ') +
-      '\n请配置 LLM / 使用 AI Agent，或补充需求与 IO 后重试。', 'error', 20000);
+      '\n建议在 AI agent 里修正 ProgramSpec，或补充需求/IO 后重试。', 'error', 20000);
+  } else if (useLlm && planner !== 'llm') {
+    showBanner('本地 LLM 未配置或不可用，已自动使用规则解析：共 ' +
+      (((data.spec || {}).segments || []).length) + ' 个段。' +
+      '（用 AI agent 打开项目时，不需要本地 LLM。）', 'ok', 12000);
   } else {
-    showBanner((useLlm ? 'AI 解析' : '规则解析') + '完成：共 ' +
+    const mode = planner === 'llm' ? '本地 LLM 解析' : '规则解析';
+    showBanner(mode + '完成：共 ' +
       (((data.spec || {}).segments || []).length) + ' 个段，质量检查通过，请确认架构后生成程序。', 'ok');
   }
 }
@@ -1157,7 +1163,7 @@ function bindEvents() {
   $('#btn-plan-rule').addEventListener('click', () =>
     runAction($('#btn-plan-rule'), () => doPlan(false), '规则解析中…'));
   $('#btn-plan-ai').addEventListener('click', () =>
-    runAction($('#btn-plan-ai'), () => doPlan(true), 'AI 解析中（可能较慢）…'));
+    runAction($('#btn-plan-ai'), () => doPlan(true), '本地 LLM 解析中（可选）…'));
 
   $('#btn-spec-validate').addEventListener('click', () =>
     runAction($('#btn-spec-validate'), doSpecValidate, '校验中…'));

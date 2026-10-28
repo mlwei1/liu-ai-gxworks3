@@ -6,6 +6,7 @@
 ## 1. 前提
 
 - Python **3.9+**，**零第三方依赖**；下文命令用 `python`（Windows 也可用 `py -3`）。
+- **不需要 API Key**：agent 的工具链里不存在"项目内 LLM 规划"；你的模型负责写 ProgramSpec。
 - 运行期数据默认在 `<repo>/workspace/`，可用环境变量 `GX3GEN_WORKSPACE` 重定向（测试/多项目隔离）。
 - 仓库根启动器：`python run_mcp.py`（stdio MCP server；stdout 只输出协议 JSON，日志走 stderr）。
 
@@ -68,16 +69,23 @@ cd <repo>
 - 双向红绿灯示例 spec（`samples/traffic_light.spec.json`，6 相位，S10→S20→…→S60→S10，T0–T5）。
 - IO 表（若传了 `io_csv`）、风格摘要（若传 `style_id`）、历史 lessons（若传 `project_id`）。
 
-也可以先要一版机器生成的起点：
+### 项目保存（可选，但推荐）
+
+**你（agent）就是规划器，不需要配置 API Key。** 如果希望项目可回看、可在 Web 软件里审阅，
+在写 spec 前后建项目并保存：
 
 ```json
-// tools/call gx3gen_plan
-{"name": "gx3gen_plan",
- "arguments": {"requirement": "做一个双向红绿灯……", "name": "双向红绿灯"}}
+// tools/call gx3gen_create_project
+{"name": "gx3gen_create_project",
+ "arguments": {"name": "双向红绿灯", "requirement": "做一个双向红绿灯……"}}
+
+// tools/call gx3gen_save_spec（把第 2 步产出的 spec 写入 workspace）
+{"name": "gx3gen_save_spec",
+ "arguments": {"project_id": "<create 返回的 id>", "spec": { ... }, "requirement": "做一个双向红绿灯……"}}
 ```
 
-返回 `{ok:true, spec:{...6 相位...}, planner:{engine:"plan_with_quality"}, quality:{ok:true,...}}`。
-**注意**：起点 spec 只作参考，你仍要复核相位/时长/互锁/IO，并按现场信息修 `assumptions`。
+`save_spec` 会写 `project.json` 与 `workspace/projects/<id>/spec.json`，并返回结构校验/质量结果；
+本地 Web 软件读取同一份项目，可直接审阅、反馈、下载产物。
 
 ### Agent 第 2 步：你产出 ProgramSpec（不要让用户写）
 

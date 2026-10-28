@@ -197,13 +197,14 @@ def main(argv: List[str] | None = None) -> int:
     lint.add_argument("--spec", required=True)
     lint.set_defaults(func=cmd_lint)
 
-    plan = sub.add_parser("plan", help="需求 + IO 表 -> ProgramSpec")
+    plan = sub.add_parser("plan", help="需求 + IO 表 -> ProgramSpec（默认规则；--llm 为可选独立模式）")
     plan.add_argument("--req", required=True)
     plan.add_argument("--io", default=None)
     plan.add_argument("--out", required=True)
     plan.add_argument("--name", default="AI 生成项目")
     plan.add_argument("--style", default=None)
-    plan.add_argument("--llm", action="store_true")
+    plan.add_argument("--llm", action="store_true",
+                      help="可选：使用已配置的本地 LLM（独立模式；agent 模式不需要）")
     plan.set_defaults(func=cmd_plan)
 
     style = sub.add_parser("style", help="风格库")

@@ -5,9 +5,8 @@
 约束（很重要）：
 
 - **stdout 只允许协议 JSON**；所有日志/异常一律写 stderr；
-- 工具实现全部使用函数内局部 import：``gx3gen.quality`` / ``gx3gen.domains`` /
-  ``planner.plan_with_quality`` 等模块由其他任务并行实现，缺失或尚未就绪时，
-  工具返回 ``{ok: false, error/errors}``，server 不能崩溃；
+- 工具实现全部使用函数内局部 import：``gx3gen.quality`` / ``gx3gen.domains`` 等模块缺失或尚未就绪时，
+  工具返回 ``{ok: false, error/errors}``，server 不能崩溃；**MCP 不调用任何项目内 LLM，也不需要 API Key**；
 - 每个工具返回 MCP 格式 ``{"content": [{"type": "text", "text": ...}], "isError": bool}``；
   除 ``gx3gen_get_generation_context`` 返回给 agent 阅读的 Markdown 外，其余工具
   text 内是 JSON 字符串（``ensure_ascii=False``）。
@@ -303,15 +302,8 @@ def _quality_module_checklist():
 
 
 # ---------------------------------------------------------------------------
-# planner / 风格 / 项目 适配层
+# 风格 / 项目 适配层
 # ---------------------------------------------------------------------------
-def _load_config():
-    try:
-        from . import config as config_mod
-
-        return config_mod.load_config()
-    except Exception:
-        return {}
 
 
 def _load_style(style_id):
@@ -325,13 +317,6 @@ def _load_style(style_id):
         return None
 
 
-def _llm_configured(config):
-    try:
-        from .planner.llm import llm_configured
-
-        return bool(llm_configured(config or {}))
-    except Exception:
-        return False
 
 
 def _style_from_spec(spec):
@@ -343,77 +328,10 @@ def _style_from_spec(spec):
     return None
 
 
-def _get_planner_plan_with_quality():
-    """并行开发期：plan_with_quality 可能挂在 planner 包或 planner.plan 里。"""
-    try:
-        from . import planner
-
-        fn = getattr(planner, "plan_with_quality", None)
-        if callable(fn):
-            return fn
-    except Exception:
-        pass
-    try:
-        from .planner import plan as plan_module
-
-        fn = getattr(plan_module, "plan_with_quality", None)
-        if callable(fn):
-            return fn
-    except Exception:
-        pass
-    return None
 
 
-def _call_plan_with_quality(fn, requirement, io_rows, style, lessons, name, config, use_llm):
-    """按签名调用 plan_with_quality（兼容 project 字典 / 扁平参数两种接口）。"""
-    project_payload = {
-        "requirement": requirement,
-        "io": io_rows,
-        "style_profile": style,
-        "lessons": lessons,
-        "name": name,
-    }
-    try:
-        import inspect
-
-        parameters = inspect.signature(fn).parameters
-    except (TypeError, ValueError):
-        return fn(project_payload, config, use_llm)
-    kwargs = {}
-    for key, parameter in parameters.items():
-        if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
-            continue
-        if key in ("requirement", "req", "text", "user_requirement"):
-            kwargs[key] = requirement
-        elif key in ("project", "project_data", "project_dict"):
-            kwargs[key] = project_payload
-        elif key in ("io", "io_rows", "io_table"):
-            kwargs[key] = io_rows
-        elif key in ("style", "style_profile", "profile"):
-            kwargs[key] = style
-        elif key in ("lessons", "feedback", "history"):
-            kwargs[key] = lessons
-        elif key == "name":
-            kwargs[key] = name
-        elif key == "config":
-            kwargs[key] = config
-        elif key == "use_llm":
-            kwargs[key] = use_llm
-        elif key == "project_id":
-            kwargs[key] = None
-        elif parameter.default is parameter.empty:
-            # 未知必填参数：先按 requirement 传，失败后由外层回退
-            kwargs[key] = requirement
-    return fn(**kwargs)
 
 
-def _plan_deterministic(requirement, io_rows, style, lessons, name):
-    from .planner.deterministic import plan_deterministic
-
-    try:
-        return plan_deterministic(requirement, io_rows, style, lessons, name=name)
-    except TypeError:
-        return plan_deterministic(requirement, io_rows, style, lessons)
 
 
 # ---------------------------------------------------------------------------
@@ -991,124 +909,108 @@ def _tool_generate_program(arguments):
     )
 
 
-def _tool_plan(arguments):
+
+
+def _project_spec_path(project_id):
+    from . import workspace
+
+    return Path(workspace.project_dir(project_id)) / "spec.json"
+
+
+def _tool_create_project(arguments):
+    name = _as_str(arguments.get("name")).strip() or "未命名项目"
     requirement = _as_str(arguments.get("requirement")).strip()
     io_rows = arguments.get("io")
     io_csv = _as_str(arguments.get("io_csv")).strip()
-    style_id = _as_str(arguments.get("style_id")).strip()
-    use_llm = bool(arguments.get("use_llm"))
-    name = _as_str(arguments.get("name")).strip() or "MCP 规划项目"
-    project_id = _as_str(arguments.get("project_id")).strip()
-
-    if project_id:
-        try:
-            from . import workspace
-
-            project = workspace.load_project(project_id)
-            requirement = requirement or _as_str(project.get("requirement")).strip()
-            if not isinstance(io_rows, list) or not io_rows:
-                io_rows = project.get("io") or []
-            if not style_id:
-                reference = project.get("style_profile")
-                if isinstance(reference, str):
-                    style_id = reference.strip()
-            name = _as_str(project.get("name")).strip() or name
-        except Exception as exc:
-            return _fail("项目 %s 读取失败：%s" % (project_id, exc))
-
-    if not requirement:
-        raise ToolError("缺少 requirement：请提供中文需求描述")
-    if io_rows is None:
-        io_rows = []
-    if isinstance(io_rows, str) and io_rows.strip():
-        io_csv = io_csv or io_rows
-        io_rows = []
     if io_csv:
         try:
             from .spec import parse_io_csv
 
-            parsed = parse_io_csv(io_csv)
-            if parsed:
-                io_rows = parsed
+            io_rows = parse_io_csv(io_csv) or []
         except Exception as exc:
-            _log("io_csv 解析失败: %s" % exc)
-    if not isinstance(io_rows, list):
+            return _fail("io_csv 解析失败：%s: %s" % (type(exc).__name__, exc))
+    if io_rows is not None and not isinstance(io_rows, list):
         raise ToolError("io 必须是 IO 行数组：[{device, comment, role}]")
+    try:
+        from . import workspace
 
-    style = _load_style(style_id)
-    lessons = []
-    if project_id:
+        project = workspace.create_project(name, requirement=requirement)
+        if io_rows:
+            project["io"] = io_rows
+            workspace.save_project(project)
+        spec_path = _project_spec_path(project["id"])
+        return _ok(project_id=project["id"], name=project.get("name"),
+                   project_path=workspace.project_dir(project["id"]),
+                   spec_path=str(spec_path),
+                   next_step="用 gx3gen_save_spec 写入 ProgramSpec；Web 软件会读取同一份项目/spec。")
+    except Exception as exc:
+        return _fail("创建项目失败：%s: %s" % (type(exc).__name__, exc))
+
+
+def _tool_save_spec(arguments):
+    project_id = _as_str(arguments.get("project_id")).strip()
+    if not project_id:
+        raise ToolError("缺少 project_id（先用 gx3gen_create_project 创建）")
+    spec = _extract_spec(arguments)
+    requirement = _as_str(arguments.get("requirement"))
+    try:
+        from . import workspace
+
+        project = workspace.load_project(project_id)
+        project["spec"] = spec
+        if requirement.strip():
+            project["requirement"] = requirement
+        io_rows = arguments.get("io")
+        if isinstance(io_rows, list) and io_rows:
+            project["io"] = io_rows
+        workspace.save_project(project)
+        spec_path = _project_spec_path(project_id)
+        spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+        ok, errors = _validate_spec_or_errors(spec)
+        quality = _check_quality(spec, requirement) if ok else _empty_quality("spec 结构不合法")
+        return _ok(project_id=project_id, spec_path=str(spec_path),
+                   valid=ok, errors=errors, quality=quality,
+                   quality_ok=bool(quality.get("ok")) if quality.get("available") else None,
+                   next_step="确认质量通过后调用 gx3gen_generate_program；Web 软件读取同一份 spec。")
+    except FileNotFoundError:
+        return _fail("项目不存在：%s" % project_id)
+    except Exception as exc:
+        return _fail("保存 spec 失败：%s: %s" % (type(exc).__name__, exc))
+
+
+def _tool_load_spec(arguments):
+    project_id = _as_str(arguments.get("project_id")).strip()
+    if not project_id:
+        raise ToolError("缺少 project_id")
+    try:
+        from . import workspace
+
+        project = workspace.load_project(project_id)
+    except FileNotFoundError:
+        return _fail("项目不存在：%s" % project_id)
+    except Exception as exc:
+        return _fail("读取项目失败：%s: %s" % (type(exc).__name__, exc))
+    spec = project.get("spec")
+    spec_path = _project_spec_path(project_id)
+    if not isinstance(spec, dict) and spec_path.exists():
         try:
-            from .feedback import store
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        except ValueError:
+            spec = None
+    if not isinstance(spec, dict):
+        return _fail("项目 %s 还没有 ProgramSpec；先写 spec 或调用 gx3gen_save_spec" % project_id)
+    return _ok(project_id=project_id, spec=spec,
+               requirement=project.get("requirement") or "",
+               io=project.get("io") or [], spec_path=str(spec_path))
 
-            lessons = store.lessons(project_id)
-        except Exception:
-            lessons = []
-    config = _load_config()
-    llm_ready = _llm_configured(config)
 
-    spec = None
-    engine = "deterministic"
-    planner_notes = []
-    quality_from_plan = None
-    plan_fn = _get_planner_plan_with_quality()
-    if callable(plan_fn):
-        try:
-            result = _call_plan_with_quality(
-                plan_fn, requirement, io_rows, style, lessons, name, config, use_llm)
-            if isinstance(result, dict) and isinstance(result.get("spec"), dict):
-                spec = result["spec"]
-                if isinstance(result.get("quality"), dict):
-                    quality_from_plan = result["quality"]
-                    planner_notes.append("plan_with_quality 已返回 quality")
-                if result.get("planner"):
-                    planner_notes.append("planner=%s" % result.get("planner"))
-            elif isinstance(result, dict) and result.get("segments"):
-                spec = result
-            if spec is not None:
-                engine = "plan_with_quality"
-        except TypeError as exc:
-            planner_notes.append("plan_with_quality 签名不匹配（%s），回退确定性规划" % exc)
-        except Exception as exc:
-            planner_notes.append("plan_with_quality 失败（%s: %s），回退确定性规划"
-                                 % (type(exc).__name__, exc))
-    if spec is None:
-        try:
-            spec = _plan_deterministic(requirement, io_rows, style, lessons, name)
-            engine = "deterministic"
-        except Exception as exc:
-            _log("确定性规划失败: %s\n%s" % (exc, traceback.format_exc()))
-            return _fail("规划失败：%s: %s" % (type(exc).__name__, exc))
+def _tool_list_projects(arguments):
+    try:
+        from . import workspace
 
-    spec = dict(spec)
-    ok, errors = _validate_spec_or_errors(spec)
-    if not ok:
-        quality = _empty_quality("规划结果结构不合法")
-    elif quality_from_plan is not None:
-        quality = _normalize_quality_result(quality_from_plan)
-    else:
-        quality = _check_quality(spec, requirement)
-    planner_info = {
-        "engine": engine,
-        "use_llm_requested": bool(use_llm),
-        "llm_configured": llm_ready,
-        "notes": planner_notes,
-    }
-    if planner_info["use_llm_requested"] and not planner_info["llm_configured"]:
-        planner_info["notes"].append(
-            "未配置 LLM（config.llm 缺少 base_url/api_key/model），已用规则规划；"
-            "你也可以自己产出 ProgramSpec 后调用 gx3gen_validate_spec / gx3gen_generate_program。"
-        )
-    return _json_result({
-        "ok": ok,
-        "spec": spec,
-        "planner": planner_info,
-        "quality": quality,
-        "quality_ok": bool(quality.get("ok")) if quality.get("available") else None,
-        "errors": errors,
-        "assumptions": list(spec.get("assumptions") or []),
-        "next_step": "复核/修改 spec（尤其 assumptions 与设备）后调用 gx3gen_validate_spec，再 gx3gen_generate_program。",
-    }, is_error=not ok)
+        return _ok(projects=workspace.list_projects())
+    except Exception as exc:
+        return _fail("项目列表读取失败：%s: %s" % (type(exc).__name__, exc))
 
 
 def _tool_get_examples(arguments):
@@ -1202,7 +1104,7 @@ def _tool_import_style(arguments):
         style={"id": saved.get("id"), "name": saved.get("name"),
                "created_at": saved.get("created_at"),
                "segment_count": len(saved.get("segments") or [])},
-        message="风格已导入；在 get_generation_context / plan / generate 里用 style_id=%s 引用。" % saved.get("id"),
+        message="风格已导入；在 get_generation_context / generate 里用 style_id=%s 引用。" % saved.get("id"),
     )
 
 
@@ -1222,11 +1124,11 @@ def _tool_add_feedback(arguments):
 
         record = store.add(project_id, target, category, severity, message, expected)
     except FileNotFoundError:
-        return _fail("项目不存在：%s（先用 Web/CLI 创建项目，或改用 gx3gen_plan 直接规划）" % project_id)
+        return _fail("项目不存在：%s（可先用 gx3gen_create_project 创建项目）" % project_id)
     except Exception as exc:
         return _fail("反馈写入失败：%s: %s" % (type(exc).__name__, exc))
     return _ok(record=record,
-               message="反馈已记录；下次 gx3gen_get_generation_context / gx3gen_plan 会自动带上 lessons。")
+               message="反馈已记录；下次 gx3gen_get_generation_context 会自动带上 lessons。")
 
 
 def _tool_get_lessons(arguments):
@@ -1249,7 +1151,10 @@ def _dispatch_tool(name, arguments):
         "gx3gen_get_generation_context": _tool_get_generation_context,
         "gx3gen_validate_spec": _tool_validate_spec,
         "gx3gen_generate_program": _tool_generate_program,
-        "gx3gen_plan": _tool_plan,
+        "gx3gen_create_project": _tool_create_project,
+        "gx3gen_save_spec": _tool_save_spec,
+        "gx3gen_load_spec": _tool_load_spec,
+        "gx3gen_list_projects": _tool_list_projects,
         "gx3gen_get_examples": _tool_get_examples,
         "gx3gen_list_styles": _tool_list_styles,
         "gx3gen_import_style": _tool_import_style,
@@ -1341,28 +1246,61 @@ def _tool_definitions():
             },
         },
         {
-            "name": "gx3gen_plan",
+            "name": "gx3gen_create_project",
             "description": (
-                "用规则/LLM 把中文需求 + IO 表规划成 ProgramSpec（agent 也可以不用它、自己写 spec）。"
-                "未配置 LLM 时使用规则规划；返回 {ok, spec, planner, quality}。"
+                "创建一个 agent 工作项目（可选需求/IO）。返回 project_id、project_path、spec_path。"
+                "项目与 Web 软件共用 workspace：agent 写入的 spec 可在 Web 界面打开审阅。"
             ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "requirement": {"type": "string", "description": "中文需求描述"},
+                    "name": {"type": "string", "description": "项目名"},
+                    "requirement": {"type": "string", "description": "需求原文（可选）"},
                     "io": {
                         "type": "array",
-                        "description": "IO 行数组 [{device, comment, role}]",
+                        "description": "IO 行数组 [{device, comment, role}]（可选）",
                         "items": {"type": "object"},
                     },
-                    "io_csv": {"type": "string", "description": "IO 表 CSV 文本（与 io 二选一）"},
-                    "style_id": {"type": "string", "description": "风格画像 id（可选）"},
-                    "use_llm": {"type": "boolean", "description": "是否允许调用已配置的 LLM（默认 false）"},
-                    "name": {"type": "string", "description": "项目名（可选）"},
-                    "project_id": {"type": "string", "description": "从已有项目读取需求/IO/风格/lessons（可选）"},
+                    "io_csv": {"type": "string", "description": "IO 表 CSV 文本（与 io 二选一，可选）"},
                 },
-                "required": ["requirement"],
+                "required": ["name"],
             },
+        },
+        {
+            "name": "gx3gen_save_spec",
+            "description": (
+                "把 agent 产出的 ProgramSpec 保存到项目（写 project.json 与 spec.json），"
+                "并返回结构校验/质量检查结果。之后调用 gx3gen_generate_program；"
+                "Web 软件会读取同一份 spec。"
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "gx3gen_create_project 返回的 id"},
+                    "spec": {"type": "object", "description": "ProgramSpec JSON 对象"},
+                    "requirement": {"type": "string", "description": "需求原文（可选，用于更新项目需求）"},
+                    "io": {
+                        "type": "array",
+                        "description": "IO 行数组（可选，用于更新项目 IO）",
+                        "items": {"type": "object"},
+                    },
+                },
+                "required": ["project_id", "spec"],
+            },
+        },
+        {
+            "name": "gx3gen_load_spec",
+            "description": "读取项目中已保存的 ProgramSpec（project.json 或 spec.json），用于继续修改/生成。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"project_id": {"type": "string"}},
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "gx3gen_list_projects",
+            "description": "列出 workspace 中的项目（id/name/是否有 spec/输出/反馈数），便于 agent 选择项目继续工作。",
+            "inputSchema": {"type": "object", "properties": {}},
         },
         {
             "name": "gx3gen_get_examples",
@@ -1383,7 +1321,7 @@ def _tool_definitions():
             "name": "gx3gen_import_style",
             "description": (
                 "导入 GX Works3 导出的程序本体 CSV（+可选软元件注释 CSV），学习用户编程风格并存进风格库。"
-                "返回 style.id，可在 context/plan/generate 里用 style_id 引用。"
+                "返回 style.id，可在 context/generate 里用 style_id 引用。"
             ),
             "inputSchema": {
                 "type": "object",

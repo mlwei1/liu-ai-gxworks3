@@ -130,10 +130,10 @@
             </label>
 
             <h3>生成程序架构方案</h3>
-            <p class="hint">规则解析完全本地、确定性；AI 解析需要先在「设置」里配置 OpenAI 兼容接口（base_url / model / api_key），未配置时会自动回退为规则解析。</p>
+            <p class="hint">推荐流程：在 AI agent 对话里直接生成 ProgramSpec，再在「③ 架构确认」里粘贴/审阅；本页的规则解析完全本地、可离线使用（含双向红绿灯等模板）。「本地 LLM」是可选的非 agent 模式，需要 API Key；用 agent 时不需要。</p>
             <div class="button-row">
-              <button id="btn-plan-rule" class="btn" type="button">规则解析</button>
-              <button id="btn-plan-ai" class="btn primary" type="button">AI 解析</button>
+              <button id="btn-plan-rule" class="btn primary" type="button">规则解析</button>
+              <button id="btn-plan-ai" class="btn" type="button">本地 LLM（可选）</button>
             </div>
             <p class="hint">生成的是 ProgramSpec（段清单 / 步号段 / IO 分配 / 握手 / 报警 / 待确认问题），下一步可以手工修改 JSON 后再确认。</p>
           </div>
@@ -151,7 +151,7 @@
           <div class="card">
             <h3>ProgramSpec（可编辑 JSON）</h3>
             <textarea id="spec-json" class="code" rows="26" spellcheck="false"
-              placeholder="还没有架构方案。请回到「② 需求 / IO」点击「规则解析」或「AI 解析」。"></textarea>
+              placeholder="还没有架构方案。可以：在 AI agent 里生成 ProgramSpec 后粘贴到这里；或回到「② 需求 / IO」点「规则解析」；或使用可选的「本地 LLM」解析。"></textarea>
             <div class="button-row">
               <button id="btn-spec-validate" class="btn small" type="button">校验 JSON</button>
               <button id="btn-spec-format" class="btn small" type="button">格式化</button>
@@ -304,10 +304,12 @@
       <section class="section hidden" data-section="settings">
         <header class="section-head">
           <h2>⑥ 设置</h2>
-          <p>可选：配置 OpenAI 兼容的大模型接口，让「AI 解析」把中文需求解析成 ProgramSpec。规则解析不需要任何配置。</p>
+          <p>用 AI agent 打开本项目时不需要在这里做任何配置——agent 自带模型。只有在你把本软件当独立 Web/CI 工具、且想用「本地 LLM 解析」时，才需要下面的可选接口。</p>
         </header>
 
-        <div class="card narrow">
+        <details class="card narrow">
+          <summary><strong>可选：本地 LLM 接口（OpenAI 兼容）</strong></summary>
+          <p class="hint">agent 模式不需要 API Key。这里的配置只用于独立运行（没有 AI agent）时的「本地 LLM 解析」，保存在本机，GET 接口不会回显 api_key。</p>
           <h3>LLM 接口（OpenAI 兼容）</h3>
           <label class="field">
             <span>base_url</span>
@@ -334,8 +336,8 @@
           <div class="button-row">
             <button id="btn-save-config" class="btn primary" type="button">保存设置</button>
           </div>
-          <p class="hint">配置保存在本机 <code>workspace/config.json</code>。GET 接口不会回显 api_key。</p>
-        </div>
+          <p class="hint">配置保存在本机 <code>workspace/config.json</code>。</p>
+        </details>
       </section>
     </div>
   </main>

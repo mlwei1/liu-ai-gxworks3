@@ -1,9 +1,13 @@
-"""LLM 规划器：OpenAI 兼容 /chat/completions（urllib，标准库）。
+"""可选 standalone LLM 适配器：OpenAI 兼容 /chat/completions（urllib，标准库）。
+
+**不属于 agent 主路径**：当用户用 AI agent（Claude Code / DSH / Cursor…）打开项目时，
+agent 自己产出 ProgramSpec；MCP 不调用本模块、不需要 API Key。
+本模块只用于「没有 agent 的独立 Web/CI 模式」，或在设置页显式配置后的 `run.py plan --llm`。
 
 只用 :func:`build_prompt` / :func:`extract_json` / :func:`parse_response` 做离线可测；
 真正发请求的只有 :func:`call_llm` 与 :func:`plan_with_llm`。
 
-配置读 :mod:`gx3gen.config` 的 ``llm`` 段：
+配置读 :mod:`gx3gen.config` 的 ``llm`` 段（可选）：
 ``{"base_url": "...", "api_key": "...", "model": "...", "timeout": 120, "temperature": 0.2}``。
 base_url 可以是 ``https://host/v1``、``https://host/v1/chat/completions`` 或
 ``http://127.0.0.1:11434/v1``（会自动补 ``/chat/completions``）。

@@ -80,7 +80,13 @@ gx3gen_validate_spec({"spec": <你的 spec>, "requirement": "<需求原文>"})
 
 `ok` 表示结构合法；`quality.ok` 表示质量红线是否通过。`errors` 逐条修，直到 `ok=true` 且 `quality.ok=true`。
 
-**Step 4 生成**
+**Step 4 保存项目（可选，推荐）**
+
+如果用户希望项目可回看/可在 Web 软件里审阅，先用 `gx3gen_create_project({name, requirement, io})` 建项目，
+再 `gx3gen_save_spec({project_id, spec, requirement})` 写入 workspace（同时生成 `spec.json`）。
+之后可用 `gx3gen_load_spec` / `gx3gen_list_projects` 继续工作；Web 软件读取同一份项目与 spec。
+
+**Step 5 生成**
 
 ```json
 gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name": "<项目名>"})
@@ -89,14 +95,14 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 成功返回 `program_csv` / `comment_csv` / `network_table` / `report` 路径 + `summary/stats/segments/lint/quality/assumptions`。
 质量红线不过会返回 `ok=false + errors`（不写文件）；除非用户明确接受风险，才传 `force=true`。
 
-**Step 5 交付报告**（模板见第 7 节）。
+**Step 6 交付报告**（模板见第 7 节）。
 
-**Step 6（可选）反馈闭环**：用户把 GX 里的错误/期望告诉你后，用
+**Step 7（可选）反馈闭环**：用户把 GX 里的错误/期望告诉你后，用
 `gx3gen_add_feedback({project_id, category, severity, message, expected})` 记录；
-下一轮 `get_generation_context` / `gx3gen_plan` 会自动带上 lessons。风格学习用 `gx3gen_import_style`。
+下一轮 `get_generation_context` 会自动带上 lessons。风格学习用 `gx3gen_import_style`。
 
-> 也可以先让 `gx3gen_plan` 给一版规则/LLM 规划的 spec 作为起点（未配置 LLM 时规则可用），
-> 但**最终质量责任在你**：复核设备、补齐 assumptions、按质量红线修正。
+> **你（agent）就是 LLM。** 项目不调用 LLM、不需要 API Key；不要向用户索要 Key。
+> 规则/领域模板只是兜底参考；ProgramSpec 的最终质量责任在你：复核设备、补齐 assumptions、按质量红线修正。
 
 ## 4. 质量红线（`quality.ok=false` = 不要交付）
 
@@ -127,7 +133,10 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 | `gx3gen_get_generation_context` | **必读**生成上下文 | Markdown：ProgramSpec/架构/质量红线/示例/IO/风格/lessons |
 | `gx3gen_validate_spec` | 校验 spec + 质量检查 | `{ok, errors, warnings, suggestions, quality}` |
 | `gx3gen_generate_program` | 生成 4 个产物 | `{ok, program_csv, comment_csv, network_table, report, summary, stats, segments, lint, quality, assumptions}` |
-| `gx3gen_plan` | 规则/LLM 规划 spec（起点） | `{ok, spec, planner, quality}` |
+| `gx3gen_create_project` | 建 agent 项目（可选需求/IO） | `{project_id, project_path, spec_path}` |
+| `gx3gen_save_spec` | 保存 ProgramSpec 到项目（写 `spec.json`） | `{ok, spec_path, valid, quality, errors}` |
+| `gx3gen_load_spec` | 读回项目里的 ProgramSpec | `{ok, spec, requirement, io}` |
+| `gx3gen_list_projects` | 列出 workspace 项目 | `{projects:[...]}` |
 | `gx3gen_get_examples` | 红绿灯/三工位示例 | `{examples:{traffic_light, three_station}}` |
 | `gx3gen_list_styles` | 列出风格画像 | `{styles:[...]}` |
 | `gx3gen_import_style` | GX CSV → 风格画像 | `{style:{id,...}}` |
@@ -143,7 +152,7 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 |---|---|
 | `quality.ok=false` / `QualityError` | 按 `quality.errors` 补相位、定时器、启停、动作；不要删除检查项 |
 | `SpecError: xxx 必须是 ...` | 按错误路径改 spec：cpu 必须 `FX5U`、设备号合法、step 同段递增、segments 非空 |
-| `gx3gen_plan` 未配置 LLM | 用规则 spec 当起点，自己复核/补齐；或让用户配置 LLM |
+| `gx3gen_create_project` / `save_spec` 报项目不存在 | 先 `create_project` 拿 `project_id`，再保存；项目与 Web 共用 `<repo>/workspace` |
 | `未知工具 / Method not found` | 检查 MCP 客户端是否连到本项目 `run_mcp.py`；工具名以第 5 节为准 |
 | 产物路径不存在 | 检查 `out_dir` / `GX3GEN_WORKSPACE` 写权限；默认落在 `<repo>/workspace/out/` |
 | 用户要求“保证能编译” | 说明初稿边界：CSV 需在 GX Works3 导入→全部转换→修错，编译验证由工程师完成 |

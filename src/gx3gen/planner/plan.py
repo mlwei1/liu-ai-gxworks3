@@ -1,9 +1,9 @@
 """规划入口：项目（需求 + IO + 风格 + 反馈）→ ProgramSpec。
 
-- 默认走确定性规划（不联网）：:func:`gx3gen.planner.deterministic.plan_deterministic`；
-- ``use_llm=True`` 且 config.llm 的 base_url/model/api_key 齐全时走 LLM，
-  否则自动回退确定性规划（Web UI 不配置 LLM 也能用）；
-- 返回前统一补 project.name / style_profile，并调用 ``validate_spec``。
+**默认走规则/领域模板**：:func:`gx3gen.planner.deterministic.plan_deterministic`；
+``use_llm=True`` 时才会调用可选 standalone LLM 适配器（需要用户显式配置 base_url/model/api_key）。
+**Agent-first 模式不使用本模块的 LLM 路径**：agent 自己产出 ProgramSpec，MCP 只做校验/生成。
+返回前统一补 project.name / style_profile，并调用 ``validate_spec``。
 """
 from __future__ import annotations
 

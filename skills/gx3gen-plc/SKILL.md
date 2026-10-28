@@ -17,19 +17,23 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 
 ## 核心原则
 
-1. **你（agent）产出 ProgramSpec，用户不写 JSON**。用户只给中文需求 / IO 表 / 历史 CSV。
-2. **先读上下文再动手**：`gx3gen_get_generation_context` → 你写 spec → `gx3gen_validate_spec`
+1. **你（agent）就是 LLM**：项目不调用 LLM、不需要 API Key；不要向用户索要 Key。
+   你只负责产出 ProgramSpec，确定性编译器负责格式与质量门槛。
+2. **你（agent）产出 ProgramSpec，用户不写 JSON**。用户只给中文需求 / IO 表 / 历史 CSV。
+3. **先读上下文再动手**：`gx3gen_get_generation_context` → 你写 spec → `gx3gen_validate_spec`
    → `gx3gen_generate_program`。禁止跳过校验。
-3. **不达标不交付**：`quality.ok=false` 时按 errors 迭代；缺信息问用户；不要用 1–2 个空步凑数。
-4. **不臆造设备**：设备号必须来自 IO 表/需求；猜测写 `assumptions`。
-5. **不许声称已在 GX Works3 编译/仿真通过**。CSV 是待导入初稿，导入→全部转换→修错由工程师完成。
+4. **不达标不交付**：`quality.ok=false` 时按 errors 迭代；缺信息问用户；不要用 1–2 个空步凑数。
+5. **不臆造设备**：设备号必须来自 IO 表/需求；猜测写 `assumptions`。
+6. **不许声称已在 GX Works3 编译/仿真通过**。CSV 是待导入初稿，导入→全部转换→修错由工程师完成。
 
 ## 工具路由（MCP）
 
 | 场景 | 调用 |
 |---|---|
 | 第一次生成 / 新需求 | `gx3gen_get_generation_context({requirement, io_csv?, style_id?, project_id?})` |
-| 已有需求想先要一版 spec 起点 | `gx3gen_plan({requirement, io, io_csv?, style_id?, use_llm?})` |
+| 建项目（可选，便于回看/Web 审阅） | `gx3gen_create_project({name, requirement?, io?})` |
+| 保存你写的 spec 到项目（可选） | `gx3gen_save_spec({project_id, spec, requirement?, io?})` |
+| 读回项目 spec | `gx3gen_load_spec({project_id})` / `gx3gen_list_projects({})` |
 | 校验你写的 spec | `gx3gen_validate_spec({spec, requirement})` |
 | 生成程序 | `gx3gen_generate_program({spec, requirement, name?, out_dir?, force?})` |
 | 看红绿灯/三工位示例 | `gx3gen_get_examples({kind})` |
@@ -40,8 +44,8 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 工具返回：`{content:[{type:"text", text}], isError}`。context 是 Markdown，其余是 JSON 字符串；
 失败返回 `{ok:false,error/errors}`，不会破坏 server。MCP 配置见仓库根 `mcp.json.example`。
 
-没有 MCP 时：`python run.py plan/gen`、`python -m gx3gen.cli`，或直接 import `gx3gen` 包；
-流程与字段完全一致。
+没有 MCP 时：`python run.py gen`、`python -m gx3gen.cli`，或直接 import `gx3gen` 包；
+`run.py plan` 是规则/领域模板兜底（不调用 LLM），可用于结构化需求或双向红绿灯。
 
 ## 工作流（固定 6 步）
 
@@ -49,6 +53,7 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 0 收集：工位/动作顺序、互锁、延时、启停/急停、手自动、报警、IO 表（缺则问）
 1 上下文：gx3gen_get_generation_context（必读）
 2 写 ProgramSpec（结构见 references/program_spec.md）
+2.5（可选）create_project + save_spec：项目可回看、Web 可审阅
 3 校验：gx3gen_validate_spec → 修到 ok=true && quality.ok=true
 4 生成：gx3gen_generate_program → 得到 4 个产物路径
 5 交付报告：路径 + 结构 + quality/lint + assumptions + GX 落地步骤
@@ -81,7 +86,7 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 | `QualityError` / `quality.ok=false` | 按 `quality.errors` 补相位/定时器/启停/动作；先修再生成，别删检查 |
 | `SpecError` 字段路径报错 | cpu 必须 `FX5U`；设备号合法；同段 step 递增不重复；segments 非空 |
 | `未知工具` / `Method not found` | MCP 客户端没连到本项目 `run_mcp.py`；工具名见上表 |
-| `plan` 未配置 LLM | 规则 spec 当起点，自己复核；或让用户配置 LLM |
+| `plan`/`create_project` 报错 | 先 `gx3gen_create_project` 建项目；不需要 API Key（agent 就是 LLM） |
 | 产物路径不存在 | 检查 `out_dir` / `GX3GEN_WORKSPACE` 写权限；默认 `<repo>/workspace/out/` |
 | 用户要“保证编译通过” | 说明初稿边界：GX 导入 → 全部转换 → 修错由工程师完成 |
 

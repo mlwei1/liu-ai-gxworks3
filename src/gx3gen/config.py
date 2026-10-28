@@ -21,6 +21,7 @@ def config_path() -> Path:
 
 
 DEFAULT_CONFIG: Dict[str, Any] = {
+    # llm 仅为可选的独立 Web/CI 适配器配置；agent 模式不使用、不需要 API Key。
     "llm": {
         "base_url": "",
         "api_key": "",

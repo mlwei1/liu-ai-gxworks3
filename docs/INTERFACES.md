@@ -5,7 +5,7 @@
 ## gx3gen.config
 
 ```python
-DEFAULT_CONFIG: dict   # {"llm": {"base_url": "", "api_key": "", "model": "", "timeout": 120}, "ui": {"host": "127.0.0.1", "port": 8765}}
+DEFAULT_CONFIG: dict   # {"llm": {...可选 standalone...}, "ui": {...}}；agent 模式不读取/不需要 llm 配置
 def config_path() -> str
 def load_config() -> dict
 def save_config(cfg: dict) -> None
@@ -136,24 +136,10 @@ def build_domain_spec(domain: str, requirement: str, io, name: str | None = None
 
 stdio + 一行一条 JSON-RPC；由 `run_mcp.py` 启动。工具：
 `gx3gen_get_generation_context`、`gx3gen_validate_spec`、`gx3gen_generate_program`、
-`gx3gen_plan`、`gx3gen_get_examples`、`gx3gen_list_styles`、`gx3gen_import_style`、
-`gx3gen_add_feedback`、`gx3gen_get_lessons`。调用说明见 `AGENTS.md` 与 `skills/gx3gen-plc/`。
-
-## gx3gen.planner
-
-```python
-class PlannerError(RuntimeError): ...
-def plan(project: dict, config: dict, use_llm: bool = False) -> dict
-def plan_with_quality(project: dict, config: dict | None = None,
-                      use_llm: bool = False) -> dict
-    # {"spec": spec, "quality": {...}, "planner": "llm"|"deterministic"}
-def plan_deterministic(requirement: str, io: list[dict], style: dict | None, lessons: list[str]) -> dict
-    # 领域模板优先（双向红绿灯），否则走半结构化解析；完全提不出动作时抛 PlannerError
-def plan_with_llm(requirement: str, io: list[dict], style: dict | None, lessons: list[str], config: dict) -> dict
-    # prompt 含架构/质量红线 + 红绿灯样例；parse 后跑 quality，失败重试 1 次
-```
-
-## gx3gen.feedback
+`gx3gen_create_project`、`gx3gen_save_spec`、`gx3gen_load_spec`、`gx3gen_list_projects`、
+`gx3gen_get_examples`、`gx3gen_list_styles`、`gx3gen_import_style`、
+`gx3gen_add_feedback`、`gx3gen_get_lessons`。**MCP 不提供项目内 LLM/规划工具，不读 LLM 配置、不需要 API Key。**
+调用说明见 `AGENTS.md` 与 `skills/gx3gen-plc/`。
 
 ## gx3gen.style
 
@@ -193,6 +179,7 @@ def plan_with_quality(project: dict, config: dict | None = None,
 def plan_deterministic(requirement: str, io: list[dict], style: dict | None, lessons: list[str]) -> dict
     # 领域模板优先（双向红绿灯），否则走半结构化解析；完全提不出动作时抛 PlannerError
 def plan_with_llm(requirement: str, io: list[dict], style: dict | None, lessons: list[str], config: dict) -> dict
+    # 可选 standalone 适配器（非 agent 模式/CI）；agent 模式不使用、不需要 API Key。
     # prompt 含架构/质量红线 + 红绿灯样例；parse 后跑 quality，失败重试 1 次
 ```
 
@@ -240,7 +227,7 @@ GET  /api/feedback?project_id=<id>
 POST /api/optimize                       {project_id} -> {spec, checklist, prompt_hint}
 POST /api/style/import                   {name, files:[{filename, base64}]} -> profile
 GET  /api/styles ; GET /api/styles/<id>
-GET/POST /api/config                     LLM 配置（GET 去掉 api_key）
+GET/POST /api/config                     LLM 配置（可选独立模式；agent 模式不需要；GET 去掉 api_key）
 ```
 
 ## 测试约定
