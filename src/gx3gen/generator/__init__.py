@@ -9,6 +9,7 @@ from ..ilcsv.emitter import emit_csv
 from ..lint import lint_program, lint_summary
 from ..quality import QualityError, check_quality, quality_text
 from ..spec import validate_spec
+from ..audit import audit as audit_csv
 from .build import build_program, style_defaults
 from .comments import collect_comments
 from .report import network_table, report_markdown
@@ -55,8 +56,16 @@ def generate(spec: Dict[str, Any], style: Optional[Dict[str, Any]], out_dir: str
     report_md = str(out / "report.md")
 
     comments = collect_comments(spec, program)
-    stats = emit_csv(program, program_csv, comment_csv, comments)
+    project_cfg = spec.get("project") or {}
+    comment_titles = project_cfg.get("comment_titles")
+    if comment_titles is None and project_cfg.get("comment_title"):
+        comment_titles = [project_cfg.get("comment_title")]
+    stats = emit_csv(program, program_csv, comment_csv, comments,
+                     comment_titles=comment_titles)
     issues = lint_program(program, spec, comments)
+    # 生成后立刻按 GX 导入规则自检（BOM/行尾/操作数/IL/STL/注释标题）
+    csv_audit = audit_csv(program_csv, comment_csv,
+                          expected_comment_title=(comment_titles[0] if comment_titles else None))
 
     style_summary = ""
     if style:
@@ -64,12 +73,15 @@ def generate(spec: Dict[str, Any], style: Optional[Dict[str, Any]], out_dir: str
         style_summary = summarize(style)
 
     segments = _segments_summary(program)
-    summary = "生成 %d 段 / %d 网络 / %d 指令 / 约 %d 步；%s；%s" % (
+    audit_note = "；GX 导入自检通过" if csv_audit["ok"] else (
+        "；GX 导入自检发现 %d 项问题" % len(csv_audit["problems"]))
+    summary = "生成 %d 段 / %d 网络 / %d 指令 / 约 %d 步；%s；%s%s" % (
         stats["segments"], stats["rungs"], stats["instructions"], stats["steps"],
-        lint_summary(issues), quality_text(quality).splitlines()[0])
+        lint_summary(issues), quality_text(quality).splitlines()[0], audit_note)
 
     Path(table_md).write_text(network_table(program), encoding="utf-8")
-    report_text = report_markdown(program, spec, stats, issues, style_summary, summary)
+    report_text = report_markdown(program, spec, stats, issues, style_summary, summary,
+                                  csv_audit=csv_audit)
     if quality["errors"] or quality["warnings"]:
         report_text += "\n## 质量检查\n\n```\n" + quality_text(quality) + "\n```\n"
     Path(report_md).write_text(report_text, encoding="utf-8")
@@ -84,6 +96,7 @@ def generate(spec: Dict[str, Any], style: Optional[Dict[str, Any]], out_dir: str
         "assumptions": list(spec.get("assumptions") or []),
         "lint": issues,
         "quality": quality,
+        "audit": csv_audit,
         "segments": segments,
         "generated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
     }

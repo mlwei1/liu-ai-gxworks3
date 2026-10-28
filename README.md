@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#环境要求)
-[![Tests](https://img.shields.io/badge/tests-147%20passing-brightgreen.svg)](#测试)
+[![Tests](https://img.shields.io/badge/tests-162%20passing-brightgreen.svg)](#测试)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7b61ff.svg)](run_mcp.py)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -29,9 +29,10 @@
 
 | 层 | 文件 | 作用 |
 |---|---|---|
-| **Agent 接入** | [`AGENTS.md`](AGENTS.md)、[`skills/gx3gen-plc/`](skills/gx3gen-plc/)、[`run_mcp.py`](run_mcp.py) | MCP server（12 个工具）+ 技能包 + agent 手册，适配任意支持 MCP 的 AI 客户端 |
+| **Agent 接入** | [`AGENTS.md`](AGENTS.md)、[`skills/gx3gen-plc/`](skills/gx3gen-plc/)、[`run_mcp.py`](run_mcp.py) | MCP server（13 个工具）+ 技能包 + agent 手册，适配任意支持 MCP 的 AI 客户端 |
 | **规划层** | [`src/gx3gen/planner/`](src/gx3gen/planner/) | 规则解析 / 领域模板；项目内 LLM 只是**可选独立适配器**（agent 模式不使用） |
 | **质量门槛** | [`src/gx3gen/quality.py`](src/gx3gen/quality.py) | 结构检查 + 需求红线；不合格不生成 |
+| **GX 导入自检** | [`src/gx3gen/audit.py`](src/gx3gen/audit.py)、[`tools/gx_audit.py`](tools/gx_audit.py) | 生成后/导入前检查 BOM、行尾、操作数个数、IL 序列、STL-RETSTL、注释标题 |
 | **领域模板** | [`src/gx3gen/domains.py`](src/gx3gen/domains.py) | 内置双向红绿灯（6 相位/6 定时器/自动循环/启停） |
 | **确定性编译器** | [`src/gx3gen/generator/`](src/gx3gen/generator/)、[`src/gx3gen/ilcsv/`](src/gx3gen/ilcsv/) | `ProgramSpec` → 段/STL → IL → 官方 GX CSV（UTF-16LE+BOM、TAB、QUOTE_ALL、CRLF、7 列、END） |
 | **风格学习** | [`src/gx3gen/style/`](src/gx3gen/style/) | 从你 GX 导出的程序/注释 CSV 学段结构、步号段、模式位、报警基址、握手命名 |
@@ -56,7 +57,7 @@
 ```bash
 git clone https://github.com/mlwei1/liu-ai-gxworks3.git
 cd liu-ai-gxworks3
-python -m unittest discover -s tests -t .     # 147 个测试，无网络
+python -m unittest discover -s tests -t .     # 162 个测试，无网络
 ```
 
 ### A. AI Agent + MCP（推荐）
@@ -95,7 +96,8 @@ MCP 工具：
 |---|---|
 | `gx3gen_get_generation_context` | 必读上下文：ProgramSpec/架构默认/质量红线/示例/IO/风格/lessons |
 | `gx3gen_validate_spec` | 结构校验 + 质量门槛 |
-| `gx3gen_generate_program` | 生成 4 个产物（程序 CSV、注释 CSV、网络表、报告） |
+| `gx3gen_generate_program` | 生成 4 个产物（程序 CSV、注释 CSV、网络表、报告），并自动做 GX 导入自检 |
+| `gx3gen_audit_csv` | 导入前自检（格式/操作数/IL/STL/注释标题），可复核外部 CSV |
 | `gx3gen_create_project` / `gx3gen_save_spec` / `gx3gen_load_spec` / `gx3gen_list_projects` | 项目与 `spec.json` 文件交接（agent 与 Web 共用 workspace） |
 | `gx3gen_get_examples` | 红绿灯 / 三工位示例 |
 | `gx3gen_list_styles` / `gx3gen_import_style` | 管理从你 GX CSV 学到的风格画像 |
@@ -111,6 +113,7 @@ MCP 工具：
 ```bash
 python run.py plan --req samples/traffic_light.requirement.md --io samples/traffic_light.io.csv --out out/spec.json
 python run.py gen  --spec out/spec.json --out ./out-demo
+python run.py audit --program ./out-demo/program.csv --comments ./out-demo/comments.csv
 python run.py style import --program-csv "程序本体.csv" --comment-csv "全局软元件注释.csv" --name "我的风格"
 ```
 
@@ -141,6 +144,7 @@ python run.py seed-demo      # 创建一个三工位示例项目
         ▼  AI agent（你的 AI 编程工具，自带模型）产出 ProgramSpec（JSON，人可读可改）
         ▼  质量门槛（自动流程 / 循环 / 定时 / 启停 / 红绿灯相位 …）
         ▼  确定性编译器 → GX 程序本体 CSV + 软元件注释 CSV + 网络表 + 报告
+        ▼  GX 导入自检（操作数/IL/STL/注释格式）→ audit.ok
 工程师在 GX Works3：导入 CSV → 全部转换 → 修编译错误/补逻辑 → 保存
 ```
 
@@ -156,10 +160,10 @@ python run.py seed-demo      # 创建一个三工位示例项目
 输入 [`samples/traffic_light.requirement.md`](samples/traffic_light.requirement.md)，输出：
 
 ```
-3 段 / 23 网络 / 87 指令 / 约 256 步
+3 段 / 28 网络 / 92 指令 / 约 261 步
 [Title]初始化 → [Title]启动停止 → [Title]自动流程
 6 个 STL 相位 S10–S60 + 6 个定时器（K250/K30/K20/K200/K30/K20）
-末步回到 S10 形成自动循环；quality.ok = true
+6 个 STL 步块各配 1 个 RETSTL；末步回到 S10 形成自动循环；quality.ok = true；audit.ok = true
 ```
 
 对应 ProgramSpec 见 [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json)。
@@ -168,12 +172,16 @@ python run.py seed-demo      # 创建一个三工位示例项目
 
 ## GX Works3 落地步骤
 
-1. 打开一个**基座工程副本**（FX5U，已有 MAIN 程序）。
-2. 打开 MAIN 程序本体，光标放在程序内（不要停在 `END` 行）。
-3. `[编辑] → [导入文件]`，选择生成的 `program.csv`。
-4. 在软元件注释窗口导入 `comments.csv`。
-5. `全部转换`（Shift+Alt+F4），修编译错误/补逻辑，保存。
+1. 确认生成结果的 `audit.ok=true`；需要复核时运行：
+   `python run.py audit --program <program.csv> --comments <comments.csv>`。
+2. 打开一个**基座工程副本**（FX5U，已有 MAIN 程序）。
+3. 打开 MAIN 程序本体，光标放在程序内（不要停在 `END` 行）。
+4. `[编辑] → [导入文件]`，选择生成的 `program.csv`。
+5. 在软元件注释窗口导入 `comments.csv`（注释 CSV 必须是 LF 行尾，标题与目标工程一致）。
+6. `全部转换`（Shift+Alt+F4），修编译错误/补逻辑，保存。
 
+> 2026-10-28 实测：按上述约束生成的程序本体 + 注释已在 GX Works3 1.082 导入成功。
+> 常见失败原因与定位方法见 [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md)。
 > 官方限制：CSV 导入只能**替换已存在的程序本体**（不能新建 POU/程序），必须以 `END` 结尾，
 > 导入后程序处于"未转换"状态；导入是整段替换，请务必先备份/用副本工程。
 
@@ -193,7 +201,7 @@ python run.py seed-demo      # 创建一个三工位示例项目
 ├── samples/                  # 三工位 + 双向红绿灯示例
 ├── src/gx3gen/               # Python 包（planner/generator/ilcsv/style/feedback/app/mcp）
 ├── web/                      # 实验性单页审阅界面（无构建、无 CDN；非主流程）
-├── tests/                    # 147 个 unittest
+├── tests/                    # 162 个 unittest
 └── workspace/                # 运行时数据（项目/风格/产物，已 gitignore）
 ```
 
@@ -201,11 +209,12 @@ python run.py seed-demo      # 创建一个三工位示例项目
 
 ```bash
 python -m unittest discover -s tests -t .
-# Ran 147 tests ... OK
+# Ran 162 tests ... OK
 ```
 
-覆盖：GX CSV 编码/引号/续行/END、ProgramSpec 校验、生成器段/STL/注释表、风格画像、
-反馈 lessons、红绿灯领域模板与质量门槛、HTTP API、28 个 MCP 协议/工具测试。
+覆盖：GX CSV 编码/引号/续行/END、ProgramSpec 校验（含 SET/RST 操作数、LD/LDI 序列、注释标题）、
+生成器段/STL/注释表、GX 导入自检、风格画像、反馈 lessons、红绿灯领域模板与质量门槛、HTTP API、
+MCP 协议/工具测试。
 
 ### 可选：非 agent 模式（独立 Web / CI）
 
@@ -221,8 +230,10 @@ python -m unittest discover -s tests -t .
 - 目标：**FX5U / GX Works3 1.082**、单 MAIN POU、软元件 + 注释、设备段 + STL。
 - 未实现：标签/FB/ST/FBD/SFC 图、多机型、仿真、自动 GX 编译验收。
 - 生成物是**初稿**，assumptions 必须由工程师复核。
-- 真实 GX Works3 导入/转换验收仍待完成（见 [docs/STATUS.md](docs/STATUS.md)）。
-- 质量门槛是启发式检查，能挡明显垃圾，不证明逻辑正确。
+- **真实 GX 导入已实测通过**：2026-10-28 压装测试台项目 `program.csv` + `comments.csv`
+  在 GX Works3 1.082 导入成功；全部转换后的编译错误/细节逻辑仍由工程师处理。
+  排障与硬约束见 [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md)。
+- 质量门槛是启发式检查，能挡明显垃圾，不证明逻辑正确；生成后还会跑 GX 导入自检。
 
 ## 更多文档
 
@@ -232,6 +243,8 @@ python -m unittest discover -s tests -t .
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 架构
 - [docs/PRODUCT_LOOP.md](docs/PRODUCT_LOOP.md) — 产品闭环
 - [docs/CSV_FORMAT.md](docs/CSV_FORMAT.md) — GX Works3 CSV 格式
+- [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md) — GX 导入排障复盘
+- [tools/gx_audit.py](tools/gx_audit.py) — GX 导入前自检
 - [docs/STYLE_LEARNING.md](docs/STYLE_LEARNING.md) — 风格画像
 - [docs/FEEDBACK_LOOP.md](docs/FEEDBACK_LOOP.md) — 反馈闭环
 - [docs/INTERFACES.md](docs/INTERFACES.md) — 模块接口

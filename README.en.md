@@ -9,7 +9,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-147%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-162%20passing-brightgreen.svg)](#tests)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7b61ff.svg)](run_mcp.py)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -34,9 +34,10 @@ results. You only describe the requirement and provide the IO list.
 
 | Layer | Files | Purpose |
 |---|---|---|
-| **Agent integration** | [`AGENTS.md`](AGENTS.md), [`skills/gx3gen-plc/`](skills/gx3gen-plc/), [`run_mcp.py`](run_mcp.py) | MCP server (12 tools) + skill + agent handbook; works with any MCP-capable agent |
+| **Agent integration** | [`AGENTS.md`](AGENTS.md), [`skills/gx3gen-plc/`](skills/gx3gen-plc/), [`run_mcp.py`](run_mcp.py) | MCP server (13 tools) + skill + agent handbook; works with any MCP-capable agent |
 | **Planning layer** | [`src/gx3gen/planner/`](src/gx3gen/planner/) | Rule parser, domain templates; the in-project LLM is only an **optional standalone adapter** (not used in agent mode) |
 | **Quality gate** | [`src/gx3gen/quality.py`](src/gx3gen/quality.py) | Structural checks + requirement red lines; blocks junk before generation |
+| **GX import audit** | [`src/gx3gen/audit.py`](src/gx3gen/audit.py), [`tools/gx_audit.py`](tools/gx_audit.py) | Post-generation/pre-import checks: BOM, line endings, operand counts, IL sequence, STL-RETSTL, comment title |
 | **Domain templates** | [`src/gx3gen/domains.py`](src/gx3gen/domains.py) | Built-in two-way traffic light template (6 phases, timers, loop, start/stop) |
 | **Deterministic compiler** | [`src/gx3gen/generator/`](src/gx3gen/generator/), [`src/gx3gen/ilcsv/`](src/gx3gen/ilcsv/) | `ProgramSpec` → segments/STL → IL → official GX CSV (UTF-16LE+BOM, TAB, QUOTE_ALL, CRLF, 7 cols, END) |
 | **Style learning** | [`src/gx3gen/style/`](src/gx3gen/style/) | Learn segment structure, step ranges, mode bits, alarms, handshake naming from your own GX CSVs |
@@ -61,7 +62,7 @@ results. You only describe the requirement and provide the IO list.
 ```bash
 git clone https://github.com/mlwei1/liu-ai-gxworks3.git
 cd liu-ai-gxworks3
-python -m unittest discover -s tests -t .     # 147 tests, no network
+python -m unittest discover -s tests -t .     # 162 tests, no network
 ```
 
 ### A. AI agent + MCP (recommended)
@@ -96,7 +97,8 @@ Available MCP tools:
 |---|---|
 | `gx3gen_get_generation_context` | Required first read: ProgramSpec schema, architecture defaults, quality red lines, examples, IO, style summary, lessons |
 | `gx3gen_validate_spec` | Validate structure + run the quality gate |
-| `gx3gen_generate_program` | Generate the 4 artifacts (program CSV, comment CSV, network table, report) |
+| `gx3gen_generate_program` | Generate the 4 artifacts (program CSV, comment CSV, network table, report) and run a GX import audit |
+| `gx3gen_audit_csv` | Pre-import audit (format/operands/IL/STL/comment title); can check external CSVs |
 | `gx3gen_create_project` / `gx3gen_save_spec` / `gx3gen_load_spec` / `gx3gen_list_projects` | Project + `spec.json` handoff (agent and optional web UI share the same workspace) |
 | `gx3gen_get_examples` | Traffic-light / three-station examples |
 | `gx3gen_list_styles` / `gx3gen_import_style` | Manage style profiles learned from your GX CSVs |
@@ -113,6 +115,7 @@ Protocol-level example: [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md).
 ```bash
 python run.py plan --req samples/traffic_light.requirement.md --io samples/traffic_light.io.csv --out out/spec.json
 python run.py gen  --spec out/spec.json --out ./out-demo
+python run.py audit --program ./out-demo/program.csv --comments ./out-demo/comments.csv
 python run.py style import --program-csv "program.csv" --comment-csv "comments.csv" --name "MyStyle"
 ```
 
@@ -159,10 +162,10 @@ engineer in GX Works3: import CSV → Convert All → fix compile errors / compl
 Input [`samples/traffic_light.requirement.md`](samples/traffic_light.requirement.md) produces:
 
 ```
-3 segments / 23 networks / 87 instructions / ~256 steps
+3 segments / 28 networks / 92 instructions / ~261 steps
 [Title]初始化 → [Title]启动停止 → [Title]自动流程
 6 STL phases S10–S60 + 6 timers (K250/K30/K20/K200/K30/K20)
-last phase loops back to S10; quality.ok = true
+one RETSTL per STL step (6:6); last phase loops back to S10; quality.ok = true; audit.ok = true
 ```
 
 See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
@@ -171,12 +174,19 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 
 ## GX Works3 landing steps
 
-1. Open a copy of your base project (FX5U, MAIN program already exists).
-2. Open the MAIN program body; place the cursor inside the program (not on the `END` row).
-3. `[Edit] → [Import File]` and choose the generated `program.csv`.
-4. Import the device comments via the device-comment window (`comments.csv`).
-5. `Convert All` (Shift+Alt+F4), fix compile errors/logic, then save.
+1. Confirm `audit.ok=true` in the generation result; re-check with
+   `python run.py audit --program <program.csv> --comments <comments.csv>` if needed.
+2. Open a copy of your base project (FX5U, MAIN program already exists).
+3. Open the MAIN program body; place the cursor inside the program (not on the `END` row).
+4. `[Edit] → [Import File]` and choose the generated `program.csv`.
+5. Import the device comments via the device-comment window (`comments.csv`)
+   (comment CSV must use LF and the title must match the target project).
+6. `Convert All` (Shift+Alt+F4), fix compile errors/logic, then save.
 
+> 2026-10-28 field test: a generated `program.csv` + `comments.csv` imported successfully into
+> GX Works3 1.082. Root causes and fixes for common failures are documented in
+> [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md).
+>
 > Official limitation: CSV import can only **replace an existing program body** (it cannot create a new POU/program),
 > requires `END`, and the program stays "unconverted" until you run Convert. Always work on a backup/copy.
 
@@ -196,7 +206,7 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 ├── samples/                  # three-station + two-way traffic-light examples
 ├── src/gx3gen/               # Python package (planner, generator, ilcsv, style, feedback, app, MCP)
 ├── web/                      # experimental single-page review UI (no build, no CDN; not the main flow)
-├── tests/                    # 147 unittest cases
+├── tests/                    # 162 unittest cases
 └── workspace/                # runtime data (projects/styles/artifacts; git-ignored)
 ```
 
@@ -204,12 +214,13 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 
 ```bash
 python -m unittest discover -s tests -t .
-# Ran 147 tests ... OK
+# Ran 162 tests ... OK
 ```
 
-Coverage includes: GX CSV encoding/quoting/continuation/END, ProgramSpec validation, generator
-segments/STL/comment tables, style mining, feedback lessons, traffic-light domain + quality gate,
-HTTP API, and 28 MCP protocol/tool tests.
+Coverage includes: GX CSV encoding/quoting/continuation/END, ProgramSpec validation (incl. SET/RST
+operand limits, LD/LDI sequence, comment titles), generator segments/STL/comment tables, GX import
+audit, style mining, feedback lessons, traffic-light domain + quality gate, HTTP API, and MCP
+protocol/tool tests.
 
 ### Optional: non-agent mode (standalone web / CI)
 
@@ -226,8 +237,10 @@ config, and needs no API key.**
 - Target: **FX5U / GX Works3 1.082**, single MAIN POU, device-style + comments, device-segment + STL.
 - Not implemented: labels/FB/ST/FBD/SFC graphics, multi-CPU, simulation, automatic GX compile acceptance.
 - Generated programs are **drafts**; assumptions must be reviewed by an engineer.
-- Real-GX import/Convert acceptance is still pending (see [docs/STATUS.md](docs/STATUS.md)).
-- Quality gate is heuristic; it catches obvious junk, not logic errors.
+- **Real GX import has been verified**: on 2026-10-28 a press-test-stand project's `program.csv` +
+  `comments.csv` imported successfully into GX Works3 1.082; compile errors after Convert All and final
+  logic are still handled by an engineer. See [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md).
+- Quality gate is heuristic; it catches obvious junk, not logic errors. Generation also runs a GX import audit.
 
 ## More docs
 
@@ -237,6 +250,8 @@ config, and needs no API key.**
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture
 - [docs/PRODUCT_LOOP.md](docs/PRODUCT_LOOP.md) — product loop
 - [docs/CSV_FORMAT.md](docs/CSV_FORMAT.md) — GX Works3 CSV format
+- [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md) — real GX import troubleshooting
+- [tools/gx_audit.py](tools/gx_audit.py) — pre-import audit
 - [docs/STYLE_LEARNING.md](docs/STYLE_LEARNING.md) — style profiles
 - [docs/FEEDBACK_LOOP.md](docs/FEEDBACK_LOOP.md) — feedback loop
 - [docs/INTERFACES.md](docs/INTERFACES.md) — module interfaces

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from ..ir import Instruction, Program
 from .rows import CsvRow, ProgramCsv, write_comment_csv, write_program_csv
@@ -77,9 +77,11 @@ def emit(program: Program) -> Tuple[ProgramCsv, Dict[str, int]]:
 
 
 def emit_csv(program: Program, program_csv_path: str, comment_csv_path: str,
-             comments: Dict[str, str]) -> Dict[str, int]:
+             comments: Dict[str, str],
+             comment_titles: Optional[Iterable[str]] = None) -> Dict[str, int]:
     prog, stats = emit(program)
     write_program_csv(prog, program_csv_path)
-    write_comment_csv(program.project, comments, comment_csv_path)
+    write_comment_csv(program.project, comments, comment_csv_path,
+                      comment_titles=comment_titles)
     stats["comments"] = len(comments)
     return stats

@@ -23,6 +23,7 @@ REQUIRED_TOOLS = {
     "gx3gen_get_generation_context",
     "gx3gen_validate_spec",
     "gx3gen_generate_program",
+    "gx3gen_audit_csv",
     "gx3gen_create_project",
     "gx3gen_save_spec",
     "gx3gen_load_spec",
@@ -436,6 +437,38 @@ class McpServerTest(unittest.TestCase):
         self.assertNotIn("api_key", lowered)
         self.assertNotIn("gx3gen_plan", lowered)
         self.assertIn("programspec", lowered)
+
+    def test_17d_audit_csv_missing_file_returns_error(self):
+        result, text = self.client.call_tool("gx3gen_audit_csv", {
+            "program_csv_path": str(Path(self.tmpdir) / "no-such-gx3gen-program.csv"),
+        })
+        payload = _parse_json(text)
+        self.assertTrue(result.get("isError"), payload)
+        self.assertFalse(payload.get("ok"), payload)
+
+    def test_17e_generate_includes_audit_and_audit_tool_passes(self):
+        spec = json.loads(
+            (REPO_ROOT / "samples" / "traffic_light.spec.json").read_text(encoding="utf-8"))
+        requirement = (REPO_ROOT / "samples" / "traffic_light.requirement.md").read_text(
+            encoding="utf-8")
+        out_dir = tempfile.mkdtemp(dir=self.tmpdir)
+        result, text = self.client.call_tool("gx3gen_generate_program", {
+            "spec": spec,
+            "requirement": requirement,
+            "out_dir": out_dir,
+        })
+        payload = _parse_json(text)
+        self.assertFalse(result.get("isError"), payload)
+        self.assertTrue(payload.get("ok"), payload)
+        self.assertTrue((payload.get("audit") or {}).get("ok"), payload.get("audit"))
+        audit_result, audit_text = self.client.call_tool("gx3gen_audit_csv", {
+            "program_csv_path": payload["program_csv"],
+            "comment_csv_path": payload["comment_csv"],
+            "expect_comment_title": "Chinese Simplified/简体中文",
+        })
+        audit_payload = _parse_json(audit_text)
+        self.assertFalse(audit_result.get("isError"), audit_payload)
+        self.assertTrue(audit_payload.get("ok"), audit_payload)
 
     def test_18_list_styles(self):
         result, text = self.client.call_tool("gx3gen_list_styles", {})

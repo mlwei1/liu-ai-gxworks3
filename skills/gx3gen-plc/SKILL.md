@@ -35,7 +35,8 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 | 保存你写的 spec 到项目（可选） | `gx3gen_save_spec({project_id, spec, requirement?, io?})` |
 | 读回项目 spec | `gx3gen_load_spec({project_id})` / `gx3gen_list_projects({})` |
 | 校验你写的 spec | `gx3gen_validate_spec({spec, requirement})` |
-| 生成程序 | `gx3gen_generate_program({spec, requirement, name?, out_dir?, force?})` |
+| 生成程序 | `gx3gen_generate_program({spec, requirement, name?, out_dir?, force?})` → 结果含 `audit` |
+| GX 导入前自检 | `gx3gen_audit_csv({program_csv_path, comment_csv_path?, expect_comment_title?})` |
 | 看红绿灯/三工位示例 | `gx3gen_get_examples({kind})` |
 | 学用户风格 | `gx3gen_import_style({program_csv_path, comment_csv_path?, name?})` → 后续传 `style_id` |
 | 记录纠错反馈 | `gx3gen_add_feedback({project_id, target, category, severity, message, expected?})` |
@@ -55,8 +56,9 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 2 写 ProgramSpec（结构见 references/program_spec.md）
 2.5（可选）create_project + save_spec：项目可回看、Web 可审阅
 3 校验：gx3gen_validate_spec → 修到 ok=true && quality.ok=true
-4 生成：gx3gen_generate_program → 得到 4 个产物路径
-5 交付报告：路径 + 结构 + quality/lint + assumptions + GX 落地步骤
+4 生成：gx3gen_generate_program → 得到 4 个产物 + audit（GX 导入自检）
+   - audit.ok=false 时先按 problems 修 spec，不要交付未通过自检的 CSV
+5 交付报告：路径 + 结构 + quality/lint/audit + assumptions + GX 落地步骤
 （6 反馈：gx3gen_add_feedback → 下轮 lessons 自动生效）
 ```
 
@@ -72,6 +74,13 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 - [ ] 步号段不重叠、地址不冲突、注释覆盖 X/Y
 - [ ] assumptions 写全所有猜测
 
+GX 导入硬约束（违反会导入失败，详见 docs/GX_IMPORT_TROUBLESHOOTING.md）：
+
+- [ ] `SET`/`RST` 每条只有 1 个操作数（多设备拆多条）
+- [ ] rung 内 `LD`/`LDI` 后不紧跟另一个 `LD`/`LDI`（串联用 `AND`/`ANI`）
+- [ ] 一个 `STL` 步块配一个 `RETSTL`
+- [ ] 程序本体 CSV CRLF；软元件注释 CSV **LF**；注释标题与目标工程一致
+
 双向红绿灯（全部满足才可交付）：
 
 - [ ] ≥6 相位：东西绿 → 东西黄 → 全红 → 南北绿 → 南北黄 → 全红 → 回第 1 相位
@@ -84,6 +93,10 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 | 现象 | 处理 |
 |---|---|
 | `QualityError` / `quality.ok=false` | 按 `quality.errors` 补相位/定时器/启停/动作；先修再生成，别删检查 |
+| `audit.ok=false` | 按 `audit.problems` 修 SET/RST 多操作数、LD/LDI 连续、STL 配对、注释 LF/标题 |
+| `SpecError` 报 `SET/RST 操作数个数` | 拆成多条单操作数指令（`SET M500` + `SET M521`） |
+| `SpecError` 报 `LD/LDI 紧跟在...` | 串联改 `AND`、串联取反改 `ANI`；步内动作别以 LD/LDI 开头 |
+| 注释导入报「注释标题不存在」 | 注释 CSV 用 LF；`project.comment_title` 设为目标工程实际标题 |
 | `SpecError` 字段路径报错 | cpu 必须 `FX5U`；设备号合法；同段 step 递增不重复；segments 非空 |
 | `未知工具` / `Method not found` | MCP 客户端没连到本项目 `run_mcp.py`；工具名见上表 |
 | `plan`/`create_project` 报错 | 先 `gx3gen_create_project` 建项目；不需要 API Key（agent 就是 LLM） |
@@ -97,3 +110,5 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 - 仓库根 [AGENTS.md](../../AGENTS.md)：agent 操作手册
 - [docs/AGENT_WORKFLOW.md](../../docs/AGENT_WORKFLOW.md)：完整示例会话（双向红绿灯）
 - [docs/CSV_FORMAT.md](../../docs/CSV_FORMAT.md)：GX Works3 程序 CSV 格式与导入步骤
+- [docs/GX_IMPORT_TROUBLESHOOTING.md](../../docs/GX_IMPORT_TROUBLESHOOTING.md)：GX 导入真实排障复盘
+- [tools/gx_audit.py](../../tools/gx_audit.py)：GX 导入前自检

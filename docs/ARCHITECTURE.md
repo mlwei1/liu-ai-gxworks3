@@ -47,13 +47,13 @@ ProgramSpec
   │     STL Sx
   │     LD Sx / 动作（SET/RST/OUT…）
   │     LD Sx / AND 条件 / SET 下一步
-  │     … 段尾 RETSTL
+  │     RETSTL（每个 STL 步块一个）
   ├─ 报警段（每气缸两报警位 + 定时器）
   ├─ 公共段（启动停止/模式/手自动）
   └─ END
 → 指令 IR → 行模型（步号/行间声明/指令/操作数/注解）→ CSV
 → 设备注释表 → 注释 CSV
-→ 网络表 / 报告
+→ GX 导入自检（audit）→ 网络表 / 报告
 ```
 
 ## 为什么主输出 CSV 而不是 .gx3

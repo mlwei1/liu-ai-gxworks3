@@ -74,7 +74,8 @@ class TrafficLightGenerationTest(unittest.TestCase):
             instructions = iter_instructions(prog)
             ops = [item["op"] for item in instructions]
             self.assertEqual(ops.count("STL"), 6)
-            self.assertEqual(ops.count("RETSTL"), 1)
+            # FX5U 标准写法：一个 STL 步块配一个 RETSTL
+            self.assertEqual(ops.count("RETSTL"), 6)
             timers = [item["operands"] for item in instructions
                       if item["op"] == "OUT" and item["operands"]
                       and str(item["operands"][0]).startswith("T")]

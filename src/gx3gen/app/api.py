@@ -770,12 +770,14 @@ def _generate(payload: Payload) -> Response:
         result.get("lint") or result.get("warnings")
         or stats.get("lint") or stats.get("warnings") or [])
     quality = result.get("quality") if isinstance(result.get("quality"), dict) else {}
+    audit = result.get("audit") if isinstance(result.get("audit"), dict) else {}
 
     project["outputs"] = outputs
     project["stats"] = stats
     project["summary"] = summary
     project["lint"] = lint
     project["quality"] = quality
+    project["audit"] = audit
     _save_project(project)
 
     return _json(200, {
@@ -784,6 +786,7 @@ def _generate(payload: Payload) -> Response:
         "summary": summary,
         "lint": project["lint"],
         "quality": quality,
+        "audit": audit,
         "artifacts": _artifacts(project_id, outputs),
         "segments": _segment_summary(spec_data),
         "assumptions": spec_data.get("assumptions") or [],

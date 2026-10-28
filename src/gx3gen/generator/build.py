@@ -160,6 +160,8 @@ def _build_station(spec: Dict[str, Any], segment: Dict[str, Any], defaults: Dict
             target = "S%d" % int(next_step) if next_step is not None else "S%d（回待机）" % home_step
             comment = "转移：%s → %s" % (" & ".join(conditions) or step_device, target)
         rungs.append(Rung(instructions, comment=comment))
+        # 每个 STL 步块单独闭合（FX5U 标准写法：一个 STL 对应一个 RETSTL）
+        rungs.append(Rung([ins("RETSTL")], comment="STL %s 块结束" % step_device))
 
     # 段完成交接信号
     last_step_device = "S%d" % int(steps[-1]["step"])
@@ -174,7 +176,6 @@ def _build_station(spec: Dict[str, Any], segment: Dict[str, Any], defaults: Dict
             instructions.append(ins("SET", resolve(spec, device)))
         rungs.append(Rung(instructions, comment="移位标志"))
 
-    rungs.append(Rung([ins("RETSTL")], comment="STL 块结束"))
     step_range = segment.get("step_range")
     step_range_tuple = (int(step_range[0]), int(step_range[1])) if step_range else (start_step, int(steps[-1]["step"]))
     return Segment(title=title, kind="station", rungs=rungs, step_range=step_range_tuple)

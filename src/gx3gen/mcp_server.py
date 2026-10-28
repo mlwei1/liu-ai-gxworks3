@@ -38,9 +38,11 @@ SAMPLES_DIR = REPO_ROOT / "samples"
 SERVER_INSTRUCTIONS = (
     "gx3gen 是 Mitsubishi FX5U / GX Works3 的 ProgramSpec → 程序初稿工具包。"
     "生成任何 PLC 程序前先调用 gx3gen_get_generation_context 读取 ProgramSpec 结构、"
-    "架构默认、质量红线与示例；ProgramSpec 必须由你（AI agent）产出，不要让用户手写 JSON。"
+    "架构默认、质量红线、GX 导入硬约束与示例；ProgramSpec 必须由你（AI agent）产出，不要让用户手写 JSON。"
     "流程：get_generation_context → 自己写 ProgramSpec → gx3gen_validate_spec → "
-    "gx3gen_generate_program → 向用户报告产物路径/质量结果/assumptions。"
+    "gx3gen_generate_program（结果含 audit）→ 需要时 gx3gen_audit_csv → "
+    "向用户报告产物路径/质量/audit/assumptions。"
+    "注意：SET/RST 只能 1 个操作数、LD/LDI 不能连续、一个 STL 配一个 RETSTL、注释 CSV 用 LF。"
     "同时阅读仓库根 AGENTS.md 与 skills/gx3gen-plc/SKILL.md。"
 )
 
@@ -649,7 +651,10 @@ def _render_generation_context(requirement, io_csv, style_id, project_id):
         "你是 PLC 程序工程师的 AI 助手。用户只给中文需求/IO 表；**ProgramSpec JSON 必须由你产出**，"
         "不要让用户手写 JSON，也不要把 GX 程序 CSV 当作交付物。\n"
         "流程：读本上下文 → 缺信息先问用户 → 你产出 ProgramSpec → `gx3gen_validate_spec` → "
-        "`gx3gen_generate_program` → 向用户报告产物路径、段结构、质量结果、assumptions 与 GX 落地步骤。\n"
+        "`gx3gen_generate_program` → 向用户报告产物路径、段结构、质量结果、audit、assumptions 与 GX 落地步骤。\n"
+        "GX 导入硬约束：SET/RST 每条 1 个操作数；同一 rung 内 LD/LDI 不得连续（串联用 AND/ANI）；"
+        "一个 STL 步块配一个 RETSTL；软元件注释 CSV 用 LF 且标题与目标工程一致。"
+        "生成结果里的 audit.ok=false 时先修 spec 再重生成。\n"
         "不要声称已在 GX Works3 里编译/仿真通过——本工具只做初稿生成，编译与验证由工程师在 GX Works3 接手。"
     )
 
@@ -689,6 +694,8 @@ def _render_generation_context(requirement, io_csv, style_id, project_id):
         "硬约束：spec_version 必须 \"0.1\"、cpu 必须 \"FX5U\"；segments 至少 1 个 init + 1 个 station；"
         "station.steps[].step 同段内递增不重复（建议 100/110/120…）；transition.next 为下一步整数或 null"
         "（null = 回待机 S0）；设备只能是 IO 表/需求中出现的合法软元件号，不确定就写 assumptions。"
+        "GX 指令硬约束：SET/RST 只能 1 操作数；LD/LDI 不能连续；STL/RETSTL 1:1；"
+        "注释标题用 project.comment_title（默认 Chinese Simplified/简体中文）。"
     )
 
     lines.append(
@@ -899,14 +906,39 @@ def _tool_generate_program(arguments):
         segments=result.get("segments") or [],
         assumptions=list(result.get("assumptions") or spec.get("assumptions") or []),
         lint=result.get("lint") or [],
+        audit=result.get("audit") or {},
         quality=merged_quality,
         quality_ok=bool(merged_quality.get("ok")) if merged_quality.get("available") else None,
         generated_at=result.get("generated_at"),
         next_step=(
-            "把 program.csv/comments.csv 发给用户，并报告 stats/segments/quality/lint/assumptions；"
-            "提醒在 GX Works3 副本工程中导入并执行“全部转换”。"
+            "把 program.csv/comments.csv 发给用户，并报告 stats/segments/quality/lint/audit/assumptions；"
+            "导入前可再调用 gx3gen_audit_csv 复核；提醒在 GX Works3 副本工程中导入并执行“全部转换”。"
         ),
     )
+
+
+def _tool_audit_csv(arguments):
+    """导入 GX Works3 前自检 program.csv / comments.csv。"""
+    program_path = _as_str(arguments.get("program_csv_path")).strip()
+    comment_path = _as_str(arguments.get("comment_csv_path")).strip()
+    expected_title = _as_str(arguments.get("expect_comment_title")).strip()
+    if not program_path:
+        raise ToolError("缺少 program_csv_path：请传 gx3gen_generate_program 返回的程序本体 CSV 路径")
+    try:
+        from .audit import audit
+
+        result = audit(program_path, comment_path or None,
+                       expected_comment_title=expected_title or None)
+    except FileNotFoundError as exc:
+        return _fail("CSV 文件不存在：%s" % exc)
+    except Exception as exc:
+        _log("audit 失败: %s\n%s" % (exc, traceback.format_exc()))
+        return _fail("自检失败：%s: %s" % (type(exc).__name__, exc))
+    payload = dict(result)
+    payload["next_step"] = (
+        "自检通过可继续 GX Works3 导入+全部转换；未通过请按 problems 修 spec/CSV 后重新生成。"
+    )
+    return _json_result(payload, is_error=not bool(result.get("ok")))
 
 
 
@@ -1151,6 +1183,7 @@ def _dispatch_tool(name, arguments):
         "gx3gen_get_generation_context": _tool_get_generation_context,
         "gx3gen_validate_spec": _tool_validate_spec,
         "gx3gen_generate_program": _tool_generate_program,
+        "gx3gen_audit_csv": _tool_audit_csv,
         "gx3gen_create_project": _tool_create_project,
         "gx3gen_save_spec": _tool_save_spec,
         "gx3gen_load_spec": _tool_load_spec,
@@ -1230,7 +1263,7 @@ def _tool_definitions():
             "description": (
                 "由 ProgramSpec 生成 GX Works3 可导入的程序初稿：program.csv、comments.csv、"
                 "network_table.md、report.md。质量红线不过默认拒绝生成（force=true 可强制生成初稿）。"
-                "成功返回产物路径 + summary/stats/segments/lint/quality。"
+                "成功返回产物路径 + summary/stats/segments/lint/quality/audit（GX 导入自检）。"
             ),
             "inputSchema": {
                 "type": "object",
@@ -1243,6 +1276,26 @@ def _tool_definitions():
                     "style_id": {"type": "string", "description": "风格画像 id（可选，见 gx3gen_list_styles）"},
                 },
                 "required": ["spec"],
+            },
+        },
+        {
+            "name": "gx3gen_audit_csv",
+            "description": (
+                "GX Works3 导入前自检 program.csv/comments.csv：BOM/行尾/操作数个数/"
+                "rung 内 IL 序列/STL-RETSTL 配对/注释标题与 LF。返回 {ok, problems, ...}；"
+                "不通过时 isError=true。生成器已自动包含 audit，可用本工具复核或检查外部 CSV。"
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "program_csv_path": {"type": "string", "description": "程序本体 CSV 路径"},
+                    "comment_csv_path": {"type": "string", "description": "软元件注释 CSV 路径（可选）"},
+                    "expect_comment_title": {
+                        "type": "string",
+                        "description": "目标工程的注释标题（可选，如 Chinese Simplified/简体中文）",
+                    },
+                },
+                "required": ["program_csv_path"],
             },
         },
         {

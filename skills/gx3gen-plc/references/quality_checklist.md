@@ -40,15 +40,26 @@
 - 停止/急停：复位运行位、复位所有输出、步号回待机；报警清除。
 - 气缸报警：每个气缸都有 `on_sensor`/`home_sensor`，报警延时 2s 起步。
 
-## D. 工具层检查（agent 自动执行）
+## D. GX Works3 导入硬约束（违反 = 导入失败）
+
+| # | 检查项 | 判定方法 / 说明 |
+|---|---|---|
+| D1 | `SET`/`RST` 每条只有 1 个操作数 | 多设备拆多条；生成前 `validate_spec` 会报错 |
+| D2 | 同一 rung 内 `LD`/`LDI` 后不紧跟另一个 `LD`/`LDI` | 串联用 `AND`，串联取反用 `ANI`；步内动作不要以 LD/LDI 开头 |
+| D3 | 一个 `STL` 步块配一个 `RETSTL` | 生成器按 1:1 输出；lint 会核对数量 |
+| D4 | 程序本体 CSV：UTF-16LE+BOM/TAB/7 列/CRLF/END | `gx_audit` 格式检查 |
+| D5 | 软元件注释 CSV：**LF 行尾**；注释标题与目标工程一致 | 默认 `Chinese Simplified/简体中文`；可用 `project.comment_title` 覆盖 |
+| D6 | 生成后 `audit.ok=true`；GX 导入前可再跑 `gx3gen_audit_csv` | 详见 docs/GX_IMPORT_TROUBLESHOOTING.md |
+
+## E. 工具层检查（agent 自动执行）
 
 1. `gx3gen_validate_spec` → `ok=true`（结构合法），`quality.ok=true`（红线通过）；
-2. `gx3gen_generate_program` → 返回 `ok=true` 且 4 个产物路径都存在；
+2. `gx3gen_generate_program` → 返回 `ok=true` 且 4 个产物路径都存在，且 **`audit.ok=true`**；
 3. 检查返回的 `lint`：error 必须消灭；warning 逐条判断是否可接受（写进回复）；
 4. 对照 `stats`：segments/instructions/steps 是否与需求规模相符；
-5. 回复用户必须包含：产物路径、段结构、quality/lint、assumptions、GX 落地步骤。
+5. 回复用户必须包含：产物路径、段结构、quality/lint/audit、assumptions、GX 落地步骤。
 
-## E. 质量不达标时怎么办
+## F. 质量不达标时怎么办
 
 | 情况 | 动作 |
 |---|---|

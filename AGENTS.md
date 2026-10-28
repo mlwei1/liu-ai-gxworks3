@@ -26,7 +26,7 @@ gx3gen 是面向**三菱 FX5U + GX Works3 1.082** 的 PLC 程序初稿生成器�
 1. **ProgramSpec 必须由你（agent）产出**。用户只给中文需求、IO 表、风格 CSV；不要让用户手写 JSON。
 2. 动手前先调用 `gx3gen_get_generation_context`（或读本文件 + `docs/`），**不要凭记忆猜字段**。
 3. **必须先 `gx3gen_validate_spec` 通过，再 `gx3gen_generate_program`**。禁止跳过校验直接生成。
-4. 生成成功后必须向用户报告：**产物路径、段结构/步号、质量与 lint 结果、assumptions、GX Works3 落地步骤**。
+4. 生成成功后必须向用户报告：**产物路径、段结构/步号、质量与 lint 结果、audit、assumptions、GX Works3 落地步骤**。
 5. `quality.ok=false` 时：先按 `quality.errors` 迭代修改 spec；信息不足时**直接问用户**（工艺/设备/延时/互锁），
    不要硬凑、不要删检查项、不要用 1–2 个空步蒙混。
 6. 设备号只能用 IO 表或需求原文里出现的合法软元件；不确定的写进 `assumptions`，**绝不发明设备**。
@@ -52,6 +52,7 @@ gx3gen 是面向**三菱 FX5U + GX Works3 1.082** 的 PLC 程序初稿生成器�
 # 在仓库根目录执行；Windows 下也可用 py -3
 python run.py plan --req samples/three_station.requirement.md --io samples/three_station.io.csv --out out/spec.json
 python run.py gen --spec out/spec.json --out ./out-demo
+python run.py audit --program ./out-demo/program.csv --comments ./out-demo/comments.csv
 python run.py style import --program-csv "程序本体.csv" --comment-csv "全局软元件注释.csv" --name "我的风格"
 ```
 
@@ -95,7 +96,9 @@ gx3gen_validate_spec({"spec": <你的 spec>, "requirement": "<需求原文>"})
 gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name": "<项目名>"})
 ```
 
-成功返回 `program_csv` / `comment_csv` / `network_table` / `report` 路径 + `summary/stats/segments/lint/quality/assumptions`。
+成功返回 `program_csv` / `comment_csv` / `network_table` / `report` 路径 + `summary/stats/segments/lint/quality/audit/assumptions`。
+`audit` 是生成器自动做的 GX 导入自检（BOM/行尾/操作数个数/IL 序列/STL-RETSTL/注释标题）；
+`audit.ok=false` 时先按 `audit.problems` 修正 spec 再重新生成，**不要把未通过自检的 CSV 当交付**。
 质量红线不过会返回 `ok=false + errors`（不写文件）；除非用户明确接受风险，才传 `force=true`。
 
 **Step 6 交付报告**（模板见第 7 节）。
@@ -129,13 +132,24 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 
 完整清单见 [skills/gx3gen-plc/references/quality_checklist.md](skills/gx3gen-plc/references/quality_checklist.md)。
 
+### GX Works3 导入硬约束（来自 2026-10-28 真实报错复盘）
+
+1. `SET` / `RST` 每条**只能 1 个操作数**；多设备必须拆成多条（`SET M500` + `SET M521`）。
+2. 同一 rung 内 `LD`/`LDI` 后**不得紧跟另一个 `LD`/`LDI`**；串联用 `AND`，串联取反用 `ANI`。
+3. 一个 `STL` 步块配一个 `RETSTL`（不要 6 个 STL 只配 1 个）。
+4. 程序本体 CSV 用 `CRLF`；**软元件注释 CSV 必须用 `LF`**，且注释标题必须是目标工程里存在的那个
+   （中文版默认 `Chinese Simplified/简体中文`，用 `project.comment_title` 覆盖）。
+5. 生成器会自动跑 `audit`；交付前确认 `audit.ok=true`。详细案例见
+   [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md)。
+
 ## 5. MCP 工具速查
 
 | 工具 | 用途 | 关键返回 |
 |---|---|---|
 | `gx3gen_get_generation_context` | **必读**生成上下文 | Markdown：ProgramSpec/架构/质量红线/示例/IO/风格/lessons |
 | `gx3gen_validate_spec` | 校验 spec + 质量检查 | `{ok, errors, warnings, suggestions, quality}` |
-| `gx3gen_generate_program` | 生成 4 个产物 | `{ok, program_csv, comment_csv, network_table, report, summary, stats, segments, lint, quality, assumptions}` |
+| `gx3gen_generate_program` | 生成 4 个产物 | `{ok, program_csv, comment_csv, network_table, report, summary, stats, segments, lint, quality, audit, assumptions}` |
+| `gx3gen_audit_csv` | GX 导入前自检（可复核外部 CSV） | `{ok, problems, program_problems, comment_problems}` |
 | `gx3gen_create_project` | 建 agent 项目（可选需求/IO） | `{project_id, project_path, spec_path}` |
 | `gx3gen_save_spec` | 保存 ProgramSpec 到项目（写 `spec.json`） | `{ok, spec_path, valid, quality, errors}` |
 | `gx3gen_load_spec` | 读回项目里的 ProgramSpec | `{ok, spec, requirement, io}` |
@@ -154,6 +168,10 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 | 现象 | 处理 |
 |---|---|
 | `quality.ok=false` / `QualityError` | 按 `quality.errors` 补相位、定时器、启停、动作；不要删除检查项 |
+| `audit.ok=false` | 按 `audit.problems` 修：SET/RST 多操作数、LD/LDI 连续、STL 无 RETSTL、注释 LF/标题 |
+| `SpecError` 报 `SET/RST 操作数个数` | 把多操作数拆成多条单操作数指令 |
+| `SpecError` 报 `LD/LDI 紧跟在...` | 串联条件改 `AND`、串联取反改 `ANI`；步内动作不要以 LD/LDI 开头 |
+| 注释导入报「注释标题不存在」 | 注释 CSV 用 LF；标题设为目标工程实际标题（`project.comment_title`） |
 | `SpecError: xxx 必须是 ...` | 按错误路径改 spec：cpu 必须 `FX5U`、设备号合法、step 同段递增、segments 非空 |
 | `gx3gen_create_project` / `save_spec` 报项目不存在 | 先 `create_project` 拿 `project_id`，再保存；项目文件在 `<repo>/workspace`，可选 Web 仅实验性读取 |
 | `未知工具 / Method not found` | 检查 MCP 客户端是否连到本项目 `run_mcp.py`；工具名以第 5 节为准 |
@@ -168,7 +186,7 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 - 软元件注释：<comment_csv>
 - 网络表 / 生成报告：<network_table>、<report>
 - 结构：<N> 段 / <M> 步 / <K> 条指令
-- 质量：quality <通过/未通过>，lint <告警数>；未通过项：...
+- 质量：quality <通过/未通过>，audit <通过/未通过>，lint <告警数>；未通过项：...
 - 待现场确认（assumptions）：
   1. ...
 GX Works3 落地：打开基座工程副本 → MAIN 程序内 [编辑]→[导入文件] 选程序本体 CSV →
@@ -182,6 +200,8 @@ GX Works3 落地：打开基座工程副本 → MAIN 程序内 [编辑]→[导�
 - [skills/gx3gen-plc/SKILL.md](skills/gx3gen-plc/SKILL.md)：技能包（触发词/路由/工作流/质量/常见错误）
 - [skills/gx3gen-plc/references/program_spec.md](skills/gx3gen-plc/references/program_spec.md)：ProgramSpec 字段说明
 - [skills/gx3gen-plc/references/quality_checklist.md](skills/gx3gen-plc/references/quality_checklist.md)：质量检查清单
+- [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md)：GX 导入真实排障复盘
+- [tools/gx_audit.py](tools/gx_audit.py)：GX 导入前自检（或 `python run.py audit ...`）
 - [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)：完整示例会话 + MCP 配置
 - [docs/INTERFACES.md](docs/INTERFACES.md)、[docs/CSV_FORMAT.md](docs/CSV_FORMAT.md)：模块接口与 GX CSV 格式
 - `mcp.json.example`：MCP 客户端配置模板

@@ -98,7 +98,7 @@ def lint_program(program: Program, spec: Dict[str, Any],
             "message": "%s 未在 IO 表或配置中定义/注释" % upper,
         })
 
-    # STL 配对：有 STL 的段应该以 RETSTL 结束（一个 RETSTL 可结束多步的 STL 块）
+    # STL 配对：FX5U 标准写法是一个 STL 步块配一个 RETSTL
     for segment in program.segments:
         ops = [(instruction.op or "").upper() for rung in segment.rungs for instruction in rung.instructions]
         if "STL" in ops and "RETSTL" not in ops and "STLRET" not in ops:
@@ -107,6 +107,11 @@ def lint_program(program: Program, spec: Dict[str, Any],
                 "message": "段“%s”含 STL 但没有 RETSTL，GX 转换可能报错（STL 块需 RETSTL 结束）" % (segment.title or "无标题"),
             })
 
+    if retstl_count < stl_count:
+        issues.append({
+            "severity": "warning", "code": "STL_PAIR",
+            "message": "STL 数量(%d)多于 RETSTL 数量(%d)，每个 STL 步块应有配对的 RETSTL" % (stl_count, retstl_count),
+        })
     if retstl_count > stl_count:
         issues.append({
             "severity": "warning", "code": "STL_PAIR",

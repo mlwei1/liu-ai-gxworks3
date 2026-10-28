@@ -542,6 +542,14 @@ function qualityLines(quality) {
   return lines;
 }
 
+function auditLines(audit) {
+  const data = audit || {};
+  if (!Object.keys(data).length) return [];
+  if (data.ok) return ['GX 导入自检：通过（BOM/行尾/操作数/IL/STL/注释）'];
+  return ['GX 导入自检：未通过'].concat(
+    (data.problems || []).map(item => '[GX 自检] ' + item));
+}
+
 function renderSpecTextarea(spec) {
   $('#spec-json').value = spec ? JSON.stringify(spec, null, 2) : '';
 }
@@ -658,7 +666,8 @@ function renderGenerated() {
     $('#generate-summary').textContent = generated.summary || '（生成器没有返回摘要）';
     $('#generate-segments').innerHTML = segmentsTableHtml(generated.segments || []);
     fillList('#generate-assumptions', generated.assumptions || [], '暂无待确认假设');
-    fillList('#generate-lint', qualityLines(generated.quality).concat(generated.lint || []),
+    fillList('#generate-lint', qualityLines(generated.quality)
+      .concat(auditLines(generated.audit), generated.lint || []),
       '没有额外检查提示');
     renderArtifacts('#generate-artifacts', generated.artifacts || []);
   } else {

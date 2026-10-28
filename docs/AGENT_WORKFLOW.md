@@ -185,34 +185,37 @@ cd <repo>
 
 ```json
 {"ok": true,
- "summary": "生成 3 段 / 23 网络 / 87 指令 / 约 256 步；轻量检查：…；质量检查：通过（…）",
+ "summary": "生成 3 段 / 28 网络 / 92 指令 / 约 261 步；轻量检查：…；质量检查：通过（…）；GX 导入自检通过",
  "out_dir": ".../workspace/out/双向红绿灯-20261028-…",
  "program_csv": ".../out/双向红绿灯-…/program.csv",
  "comment_csv": ".../out/双向红绿灯-…/comments.csv",
  "network_table": ".../out/双向红绿灯-…/network_table.md",
  "report": ".../out/双向红绿灯-…/report.md",
- "stats": {"rows": ..., "instructions": 87, "segments": 3, "rungs": 23, "steps": 256},
+ "stats": {"rows": ..., "instructions": 92, "segments": 3, "rungs": 28, "steps": 261},
  "segments": [{"title": "初始化", "kind": "init", "rungs": 1},
-              {"title": "红绿灯循环", "kind": "station", "rungs": 12, "step_range": [10, 69]},
+              {"title": "红绿灯循环", "kind": "station", "rungs": 17, "step_range": [10, 69]},
               {"title": "启动停止", "kind": "common", "rungs": 2}],
  "quality": {"ok": true, ...},
  "quality_ok": true,
+ "audit": {"ok": true, "problems": [], "program_problems": [], "comment_problems": []},
  "lint": [...],
  "assumptions": [...]}
 ```
 
 - 质量红线不过时：`{"ok": false, "error": "质量红线未通过，未生成文件。…", "errors": [...], "quality": {...}}`（不写文件）。
+- `audit.ok=false`：先按 `audit.problems` 修正 spec/指令再重新生成，不要交付；需要复核对已生成 CSV 调用
+  `gx3gen_audit_csv({program_csv_path, comment_csv_path, expect_comment_title?})`。
 - 仅当用户明确接受风险时才传 `"force": true`，并在回复中说明。
-- 失败不要猜“是不是成功了”——看 `ok` 与 `errors`。
+- 失败不要猜“是不是成功了”——看 `ok`、`errors` 与 `audit`。
 
 ### Agent 第 5 步：回复用户（模板）
 
 ```markdown
-已生成（GX Works3 程序初稿，3 段 / 6 相位 / 约 256 步）：
+已生成（GX Works3 程序初稿，3 段 / 6 相位 / 约 261 步）：
 - 程序本体：workspace/out/双向红绿灯-…/program.csv
 - 软元件注释：workspace/out/双向红绿灯-…/comments.csv
 - 网络表 / 生成报告：…/network_table.md、…/report.md
-- 质量：quality 通过（6 相位、6 个定时器、互锁与自动循环齐全）；lint 告警 N 条：...
+- 质量：quality 通过（6 相位、6 个定时器、互锁与自动循环齐全）；GX 导入自检 audit 通过；lint 告警 N 条：...
 - 待现场确认（assumptions）：
   1. 绿灯 10s / 黄灯 3s / 全红 1s 为按需求设定；
   2. 停止时所有灯复位为安全状态；
@@ -243,9 +246,9 @@ GX Works3 落地：打开基座工程副本 → MAIN 程序内 [编辑]→[导�
 
 - [ ] 先读过 `gx3gen_get_generation_context`（不是凭记忆写 spec）
 - [ ] `gx3gen_validate_spec` → `ok=true` 且 `quality.ok=true`
-- [ ] `gx3gen_generate_program` → `ok=true`，4 个产物路径真实存在
+- [ ] `gx3gen_generate_program` → `ok=true`，4 个产物路径真实存在，且 **`audit.ok=true`**
 - [ ] `lint` 的 error 全部消除；warning 逐条向用户说明
-- [ ] 回复里包含：产物路径、段结构/步号、quality/lint、assumptions、GX 落地步骤
+- [ ] 回复里包含：产物路径、段结构/步号、quality/lint/audit、assumptions、GX 落地步骤
 - [ ] 没有声称“GX Works3 编译/仿真通过”
 - [ ] 没有把用户代码/需求上传到网络
 

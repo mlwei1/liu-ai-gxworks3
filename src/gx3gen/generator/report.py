@@ -43,7 +43,8 @@ def network_table(program: Program) -> str:
 
 def report_markdown(program: Program, spec: Dict[str, Any], stats: Dict[str, Any],
                     issues: Optional[List[Dict[str, str]]] = None,
-                    style_summary: str = "", summary: str = "") -> str:
+                    style_summary: str = "", summary: str = "",
+                    csv_audit: Optional[Dict[str, Any]] = None) -> str:
     project = spec.get("project") or {}
     lines: List[str] = [
         "# 生成报告 · %s" % (project.get("name") or program.project),
@@ -85,6 +86,16 @@ def report_markdown(program: Program, spec: Dict[str, Any], stats: Dict[str, Any
         lines.extend(["## 轻量检查", ""])
         for item in issues:
             lines.append("- [%s] %s（%s）" % (item.get("severity"), item.get("message"), item.get("code")))
+        lines.append("")
+
+    if csv_audit is not None:
+        lines.extend(["## GX 导入自检", ""])
+        if csv_audit.get("ok"):
+            lines.append("- 通过：BOM / 行尾 / 操作数个数 / IL 序列 / STL-RETSTL 配对 / 注释标题与 LF")
+        else:
+            lines.append("- **未通过**，建议修复后再导入 GX Works3：")
+            for item in csv_audit.get("problems") or []:
+                lines.append("  - %s" % item)
         lines.append("")
 
     lines.extend([

@@ -42,7 +42,24 @@ def cmd_gen(args: argparse.Namespace) -> int:
         print("\n检查：")
         for item in result["lint"]:
             print("- [%s] %s" % (item.get("severity"), item.get("message")))
+    audit = result.get("audit") or {}
+    if audit:
+        print("\nGX 导入自检：%s" % ("通过" if audit.get("ok") else "未通过"))
+        for item in audit.get("problems") or []:
+            print("-", item)
     return 0
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """导入 GX Works3 前自检 program.csv / comments.csv。"""
+    from .audit import audit
+    result = audit(args.program, args.comments,
+                   expected_comment_title=args.expect_comment_title)
+    for item in result["problems"]:
+        print("!!", item)
+    print("GX 导入自检：%s（%d 项问题）"
+          % ("通过" if result["ok"] else "未通过", len(result["problems"])))
+    return 0 if result["ok"] else 1
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
@@ -196,6 +213,13 @@ def main(argv: List[str] | None = None) -> int:
     lint = sub.add_parser("lint", help="轻量检查 ProgramSpec")
     lint.add_argument("--spec", required=True)
     lint.set_defaults(func=cmd_lint)
+
+    audit = sub.add_parser("audit", help="导入 GX Works3 前自检 program.csv / comments.csv")
+    audit.add_argument("--program", required=True, help="程序本体 CSV 路径")
+    audit.add_argument("--comments", default=None, help="软元件注释 CSV 路径（可选）")
+    audit.add_argument("--expect-comment-title", default=None,
+                       help="目标工程的注释标题（如 Chinese Simplified/简体中文）")
+    audit.set_defaults(func=cmd_audit)
 
     plan = sub.add_parser("plan", help="需求 + IO 表 -> ProgramSpec（默认规则；--llm 为可选独立模式）")
     plan.add_argument("--req", required=True)

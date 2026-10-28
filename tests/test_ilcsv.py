@@ -86,6 +86,31 @@ class ILCSVTest(unittest.TestCase):
             notes = [row.note for row in prog.rows if row.note]
             self.assertIn('含"引号"的注释', notes)
 
+    def test_comment_csv_default_title_and_lf(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "comments.csv")
+            iorows.write_comment_csv("测试项目", {"Y0": "灯", "X0": "启动"}, path)
+            raw = Path(path).read_bytes()
+            self.assertTrue(raw.startswith(b"\xff\xfe"), "必须 UTF-16LE+BOM")
+            self.assertNotIn(b"\r\n", raw, "注释 CSV 行尾必须为 LF（GX 1.082 真实导出）")
+            text = raw[2:].decode("utf-16-le")
+            self.assertIn("Chinese Simplified/简体中文", text)
+            comments = iorows.read_comment_csv(path)
+            self.assertEqual(comments["Y0"], "灯")
+
+    def test_comment_csv_custom_titles_and_multicolumn_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "comments.csv")
+            iorows.write_comment_csv("测试项目", {"Y0": "灯"}, path,
+                                     comment_titles=["注释", "Chinese Simplified/简体中文"])
+            text = Path(path).read_bytes()[2:].decode("utf-16-le")
+            self.assertIn('"软元件名"\t"注释"\t"Chinese Simplified/简体中文"', text)
+            comments = iorows.read_comment_csv(path)
+            self.assertEqual(comments["Y0"], "灯")
+
+    def test_comment_csv_default_title_constant(self):
+        self.assertEqual(iorows.COMMENT_TITLE, "Chinese Simplified/简体中文")
+
 
 if __name__ == "__main__":
     unittest.main()

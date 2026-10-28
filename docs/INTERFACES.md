@@ -45,6 +45,8 @@ class SpecError(ValueError): ...
 def decode_text(data) -> str               # bytes/str；BOM 自动识别 UTF-16LE/BE、UTF-8、GBK
 def load_spec(path: str) -> dict
 def validate_spec(spec: dict) -> None      # 不合法抛 SpecError（含字段路径）
+    # 含 GX 导入规则：SET/RST 操作数=1、rung 内 LD/LDI 序列、instruction 操作数个数、
+    # project.comment_title / comment_titles
 def default_spec() -> dict
 def parse_io_csv(text: str) -> list[dict]  # 列：序号,软元件名,注释,类型,原位位置（顺序不敏感，有表头）
 def io_map(spec: dict) -> dict[str, dict]  # 设备 -> io 行
@@ -54,6 +56,8 @@ def lookup_device(spec: dict, token: str) -> str | None  # 设备号或注释 �
 ProgramSpec 结构见 `spec/program_spec.schema.json`。生成器只保证下列字段语义：
 
 - `project.name/cpu/gx_version/style_profile`
+- 可选 `project.comment_title`（单个）或 `project.comment_titles`（列表）：软元件注释 CSV 的注释标题，
+  默认 `Chinese Simplified/简体中文`；必须与目标 GX 工程一致
 - `io[]`
 - `modes{}`（run/stop/auto/manual/reset 等设备）
 - `segments[]`：`title`、`kind`（`init|station|common|rungs|statement`）、
@@ -132,12 +136,25 @@ def build_traffic_light_spec(requirement: str, io, name: str | None = None) -> d
 def build_domain_spec(domain: str, requirement: str, io, name: str | None = None) -> dict
 ```
 
+## gx3gen.audit
+
+```python
+def audit_program(path) -> list[str]       # 程序本体 CSV：BOM/行尾/操作数/IL 序列/STL-RETSTL/END
+def audit_comment(path, expected_title=None) -> list[str]  # 注释 CSV：BOM/LF/标题行/标题名
+def audit(program_path, comment_path=None, expected_comment_title=None) -> dict
+    # {"ok", "problems", "program_problems", "comment_problems"}
+def main(argv=None) -> int                 # tools/gx_audit.py 的命令行实现
+```
+
+生成器生成完 CSV 后自动调用 `audit`，结果字段 `audit` 同时写进 `report.md`；CLI 为
+`python run.py audit --program ... [--comments ...]`；MCP 为 `gx3gen_audit_csv`。
+
 ## gx3gen.mcp_server（agent-first 入口）
 
-stdio + 一行一条 JSON-RPC；由 `run_mcp.py` 启动。工具：
+stdio + 一行一条 JSON-RPC；由 `run_mcp.py` 启动。工具（13 个）：
 `gx3gen_get_generation_context`、`gx3gen_validate_spec`、`gx3gen_generate_program`、
-`gx3gen_create_project`、`gx3gen_save_spec`、`gx3gen_load_spec`、`gx3gen_list_projects`、
-`gx3gen_get_examples`、`gx3gen_list_styles`、`gx3gen_import_style`、
+`gx3gen_audit_csv`、`gx3gen_create_project`、`gx3gen_save_spec`、`gx3gen_load_spec`、
+`gx3gen_list_projects`、`gx3gen_get_examples`、`gx3gen_list_styles`、`gx3gen_import_style`、
 `gx3gen_add_feedback`、`gx3gen_get_lessons`。**MCP 不提供项目内 LLM/规划工具，不读 LLM 配置、不需要 API Key。**
 调用说明见 `AGENTS.md` 与 `skills/gx3gen-plc/`。
 
@@ -221,8 +238,9 @@ POST /api/projects                       {name}
 GET  /api/projects/<id>
 PUT  /api/projects/<id>                  {requirement?, io?, spec?, style_profile?}
 POST /api/plan                           {project_id, use_llm?} -> {spec, planner, quality, checklist, prompt_hint}
-POST /api/generate                       {project_id, force?} -> {outputs, stats, summary, quality, artifacts}
+POST /api/generate                       {project_id, force?} -> {outputs, stats, summary, quality, audit, artifacts}
     # 质量不通过返回 400 {error, quality:{errors:[...]}}；force=true 可强制生成（不推荐）
+    # audit 为生成器自动 GX 导入自检结果 {ok, problems, ...}
 GET  /api/projects/<id>/artifact/<name>  -> 文件下载
 POST /api/feedback                       {project_id, target, category, severity, message, expected?}
 GET  /api/feedback?project_id=<id>
@@ -236,4 +254,4 @@ GET/POST /api/config                     LLM 配置（可选独立模式；agent
 
 - 一律 `unittest`（本机无 pytest）。
 - 测试不访问网络、不依赖外部语料目录、不写 `workspace/`（用临时目录，通过 `GX3GEN_WORKSPACE` 环境变量重定向）。
-- 至少覆盖：CSV 格式（BOM/引号/续行/END）、spec 校验、生成器段/STL 结构、注释表、风格画像、反馈 lessons、HTTP API 冒烟。
+- 至少覆盖：CSV 格式（BOM/引号/续行/END）、spec 校验（含 GX 导入规则）、生成器段/STL 结构、注释表、GX 导入自检、风格画像、反馈 lessons、HTTP API 冒烟。

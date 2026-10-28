@@ -74,24 +74,31 @@ def read_program_csv(path_or_text: Any) -> ProgramCsv:
 
 
 def read_comment_csv(path_or_text: Any) -> Dict[str, str]:
+    """读软元件注释 CSV；多候选注释列时取第一个非空注释。"""
     content = _read_content(path_or_text)
     raw = list(csv.reader(io.StringIO(content, newline=""), delimiter="\t"))
     out: Dict[str, str] = {}
     for cells in raw[2:]:
         cells = list(cells) + [""] * 2
         device = (cells[0] or "").strip()
-        if device:
-            out[device] = (cells[1] or "").strip()
+        if not device:
+            continue
+        comment = ""
+        for cell in cells[1:]:
+            if (cell or "").strip():
+                comment = cell.strip()
+                break
+        out[device] = comment
     return out
 
 
 # ---------------------------------------------------------------------------
 # 写
 # ---------------------------------------------------------------------------
-def _write_rows(path: str, rows: Iterable[List[str]]) -> None:
+def _write_rows(path: str, rows: Iterable[List[str]], lineterminator: str = "\r\n") -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-16", newline="") as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\r\n",
+        writer = csv.writer(handle, delimiter="\t", lineterminator=lineterminator,
                             quoting=csv.QUOTE_ALL)
         writer.writerows(rows)
 
@@ -117,11 +124,41 @@ def _sort_key(device: str):
     return order, value, device
 
 
-def write_comment_csv(project: str, comments: Dict[str, str], path: str) -> None:
-    rows: List[List[str]] = [[project], ["软元件名", "注释"]]
+# GX Works3 软元件注释 CSV 的注释标题（[视图]→[多注释显示设置] 里的注释标题名）。
+#
+# 实测（GX Works3 1.082 真实导出样例）：
+# - 中文版默认工程导出的是 "Chinese Simplified/简体中文"；
+# - 另有工程把标题自定义成 "注释"（FK 阀内漏测试设备样例）。
+# GX 导入时按标题名去工程里匹配，匹配不到就报
+# 「"注释"相应的注释标题不存在，因此未读取」+「文件格式有误」。
+#
+# 默认只输出一个标题（与目标工程一致 → 零错误）；换工程时用
+# spec 的 project.comment_title / project.comment_titles 覆盖。
+# 注意不要图省事输出多个候选：GX 会逐列检查，不存在的标题会各报一次错。
+COMMENT_DEVICE_HEADER = "软元件名"
+COMMENT_TITLE = "Chinese Simplified/简体中文"
+
+
+def write_comment_csv(project: str, comments: Dict[str, str], path: str,
+                      device_header: str = COMMENT_DEVICE_HEADER,
+                      comment_titles: Optional[Iterable[str]] = None) -> None:
+    """写软元件注释 CSV。
+
+    与 GX Works3 1.082 真实导出样例严格一致：
+    - UTF-16LE + BOM、TAB 分隔、所有字段双引号、**行尾 LF**；
+    - 第 1 行工程名（单字段）、第 2 行 "软元件名" + 注释标题、第 3 行起为数据；
+    - 注释标题必须是目标工程里存在的那个，否则 GX 报「注释标题不存在」。
+    """
+    if comment_titles is None:
+        titles = [COMMENT_TITLE]
+    else:
+        titles = [str(item).strip() for item in comment_titles if str(item).strip()]
+        if not titles:
+            titles = [COMMENT_TITLE]
+    rows: List[List[str]] = [[project], [device_header] + titles]
     for device in sorted(comments.keys(), key=_sort_key):
-        rows.append([device, comments[device]])
-    _write_rows(path, rows)
+        rows.append([device] + [comments[device]] * len(titles))
+    _write_rows(path, rows, lineterminator="\n")
 
 
 # ---------------------------------------------------------------------------

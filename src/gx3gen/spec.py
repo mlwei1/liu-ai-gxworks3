@@ -29,6 +29,110 @@ MC MCR CJ JMP CALL SRET FOR NEXT
 NOP END
 """.split())
 
+# FX5U 指令操作数个数约束：(最少, 最多)。未列出的指令不做限制。
+# 注意：SET/RST 每条指令只接受 1 个操作数——多个设备必须拆成多条指令，
+# 否则 GX Works3 导入时报「指令不正确」。
+OP_OPERAND_LIMITS = {
+    "SET": (1, 1),
+    "RST": (1, 1),
+    "OUT": (1, 2),
+    "ZRST": (2, 2),
+    "MOV": (2, 2),
+    "MOVP": (2, 2),
+    "DMOV": (2, 2),
+    "CMP": (3, 3),
+    "CMPP": (3, 3),
+    "ADD": (3, 3),
+    "SUB": (3, 3),
+    "MUL": (3, 3),
+    "DIV": (3, 3),
+    "STL": (1, 1),
+    "RETSTL": (0, 0),
+    "END": (0, 0),
+}
+
+
+def _check_operand_count(errors: List[str], ibase: str, op: str,
+                         operands: List[Any]) -> None:
+    """按 FX5U 指令集校验操作数个数（SET/RST 必须 1 个，多设备要拆成多条）。"""
+    limits = OP_OPERAND_LIMITS.get(op)
+    if not limits:
+        return
+    low, high = limits
+    count = len(operands)
+    if low <= count <= high:
+        return
+    expect = ("%d" % low) if low == high else ("%d~%d" % (low, high))
+    _err(errors, ibase + ".operands",
+         "%s 指令操作数个数应为 %s，当前 %d 个（%s）；请拆成多条指令"
+         % (op, expect, count, "、".join(str(item) for item in operands)))
+
+
+def _check_rungs(errors: List[str], base: str, rungs: Any, required: bool = True) -> None:
+    """校验 rungs 网络结构（init/common/rungs 三种段共用）。"""
+    if rungs is None:
+        if required:
+            _err(errors, base + ".rungs", "rungs 段至少需要一条网络")
+        return
+    if not isinstance(rungs, list) or not rungs:
+        _err(errors, base + ".rungs", "rungs 段至少需要一条网络")
+        return
+    for r_index, rung in enumerate(rungs):
+        rbase = "%s.rungs[%d]" % (base, r_index)
+        if not isinstance(rung, dict) or not isinstance(rung.get("instructions"), list):
+            _err(errors, rbase, "需要 instructions 数组")
+            continue
+        for i_index, ins in enumerate(rung["instructions"]):
+            ibase = "%s.instructions[%d]" % (rbase, i_index)
+            if not isinstance(ins, dict) or not isinstance(ins.get("op"), str) \
+                    or not ins.get("op", "").strip():
+                _err(errors, ibase, "缺少 op")
+                continue
+            if ins["op"].strip().upper() not in VALID_OPS:
+                _err(errors, ibase + ".op", "未知指令: %r" % ins["op"])
+            _check_operand_count(errors, ibase, ins["op"].strip().upper(),
+                                ins.get("operands") or [])
+            for operand in ins.get("operands") or []:
+                if not isinstance(operand, str) or not operand.strip():
+                    _err(errors, ibase + ".operands", "操作数必须是非空字符串")
+        _check_il_sequence(errors, rbase, rung.get("instructions") or [])
+
+
+# 三菱 IL 规则：LD/LDI 是「载入」指令，会丢弃之前的结果并开启新支路。
+# 串联条件必须用 AND/ANI/OR/ORI；LD 之后紧跟另一个 LD/LDI 会让 GX 转梯形图时
+# 产生悬空支路 → 导入报「梯形图配置不正确」。
+LOAD_OPS = {"LD", "LDI"}
+BRANCH_OPS = {"ORB", "ANB", "MPS", "MRD", "MPP"}
+
+
+def _check_il_sequence(errors: List[str], rbase: str, instructions: List[Any]) -> None:
+    """校验一条 rung 内的 IL 指令序列（逻辑载入不能紧接逻辑载入）。"""
+    prev_load = ""
+    prev_desc = ""
+    prev_index = -1
+    for index, ins in enumerate(instructions):
+        if not isinstance(ins, dict):
+            continue
+        op = str(ins.get("op") or "").strip().upper()
+        operands = ins.get("operands") or []
+        desc = "%s %s" % (op, " ".join(str(x) for x in operands)) if operands else op
+        if op in LOAD_OPS:
+            if prev_load in LOAD_OPS:
+                _err(errors, "%s.instructions[%d].op" % (rbase, index),
+                     "%s 紧跟在第 %d 条 `%s` 之后：LD/LDI 是载入指令，会丢弃前一条结果"
+                     "并开启新支路；串联条件请用 AND，串联取反请用 ANI"
+                     % (desc, prev_index, prev_desc))
+            prev_load = op
+            prev_desc = desc
+            prev_index = index
+        elif op in BRANCH_OPS:
+            prev_load = ""
+            prev_desc = desc
+            prev_index = index
+        elif op:
+            prev_desc = desc
+            prev_index = index
+
 
 class SpecError(ValueError):
     """ProgramSpec 不合法。"""
@@ -216,6 +320,16 @@ def validate_spec(spec: Any) -> None:
             _err(errors, "project.name", "必须是非空字符串")
         if project.get("cpu") != CPU:
             _err(errors, "project.cpu", "本期只支持 %r" % CPU)
+        # 注释标题（GX 工程 [视图]→[多注释显示设置] 里的注释标题名）。
+        # 不填则用内置候选集；填字符串表示只用一个标题，填列表表示给出多个候选列。
+        titles = project.get("comment_titles")
+        if titles is None and project.get("comment_title") is not None:
+            titles = [project.get("comment_title")]
+        if titles is not None:
+            if not isinstance(titles, list) or not titles:
+                _err(errors, "project.comment_titles", "必须是非空字符串数组")
+            elif not all(isinstance(item, str) and item.strip() for item in titles):
+                _err(errors, "project.comment_titles", "每个标题必须是非空字符串")
 
     io = spec.get("io")
     if not isinstance(io, list):
@@ -305,9 +419,20 @@ def validate_spec(spec: Any) -> None:
                                     continue
                                 if item["op"].strip().upper() not in VALID_OPS:
                                     _err(errors, ibase + ".op", "未知指令: %r" % item["op"])
+                                _check_operand_count(errors, ibase, item["op"].strip().upper(),
+                                                    item.get("operands") or [])
                                 for operand in item.get("operands") or []:
                                     if not isinstance(operand, str) or not operand.strip():
                                         _err(errors, ibase + ".operands", "操作数必须是非空字符串")
+                            # 生成器会在动作指令前自动加 `LD S<step>` 作为步条件，
+                            # 动作里再出现 LD/LDI 会覆盖步条件并造成悬空支路。
+                            action_ins = action.get("instructions") or []
+                            if action_ins and isinstance(action_ins[0], dict) \
+                                    and str(action_ins[0].get("op") or "").strip().upper() in LOAD_OPS:
+                                _err(errors, abase + ".instructions[0].op",
+                                     "步内动作不能以 LD/LDI 开头：生成器已自动加 `LD S<step>` 作为步条件，"
+                                     "再载入会覆盖它并让 GX 报「梯形图配置不正确」")
+                            _check_il_sequence(errors, abase, action_ins)
                         transition = step.get("transition") or {}
                         if not isinstance(transition, dict):
                             _err(errors, sbase + ".transition", "必须是对象")
@@ -317,26 +442,11 @@ def validate_spec(spec: Any) -> None:
                             if transition.get("next") is not None and not isinstance(transition["next"], int):
                                 _err(errors, sbase + ".transition.next", "必须是整数或 null")
             elif kind == "rungs":
-                rungs = segment.get("rungs")
-                if not isinstance(rungs, list) or not rungs:
-                    _err(errors, base + ".rungs", "rungs 段至少需要一条网络")
-                else:
-                    for r_index, rung in enumerate(rungs):
-                        rbase = "%s.rungs[%d]" % (base, r_index)
-                        if not isinstance(rung, dict) or not isinstance(rung.get("instructions"), list):
-                            _err(errors, rbase, "需要 instructions 数组")
-                            continue
-                        for i_index, ins in enumerate(rung["instructions"]):
-                            ibase = "%s.instructions[%d]" % (rbase, i_index)
-                            if not isinstance(ins, dict) or not isinstance(ins.get("op"), str) \
-                                    or not ins.get("op", "").strip():
-                                _err(errors, ibase, "缺少 op")
-                                continue
-                            if ins["op"].strip().upper() not in VALID_OPS:
-                                _err(errors, ibase + ".op", "未知指令: %r" % ins["op"])
-                            for operand in ins.get("operands") or []:
-                                if not isinstance(operand, str) or not operand.strip():
-                                    _err(errors, ibase + ".operands", "操作数必须是非空字符串")
+                _check_rungs(errors, base, segment.get("rungs"), required=True)
+            elif kind in ("init", "common"):
+                # init/common 段的 rungs 可选（init 缺省时生成器自动补一条），
+                # 但一旦写了就必须逐条校验指令与操作数。
+                _check_rungs(errors, base, segment.get("rungs"), required=False)
             elif kind == "statement":
                 statements = segment.get("statements")
                 if not isinstance(statements, list) or not statements:
