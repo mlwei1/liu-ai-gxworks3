@@ -1,0 +1,155 @@
+{
+  "spec_version": "0.1",
+  "project": {
+    "name": "三工位取放",
+    "cpu": "FX5U",
+    "gx_version": "1.082",
+    "style_profile": null
+  },
+  "io": [
+    {"device": "X0", "comment": "启动", "role": "input"},
+    {"device": "X1", "comment": "停止", "role": "input"},
+    {"device": "X2", "comment": "竖直缸原位", "role": "input"},
+    {"device": "X3", "comment": "竖直缸到位", "role": "input"},
+    {"device": "X4", "comment": "水平缸原位", "role": "input"},
+    {"device": "X5", "comment": "水平缸到位", "role": "input"},
+    {"device": "X6", "comment": "夹爪原位", "role": "input"},
+    {"device": "X7", "comment": "夹爪到位", "role": "input"},
+    {"device": "Y0", "comment": "竖直缸", "role": "output"},
+    {"device": "Y1", "comment": "水平缸", "role": "output"},
+    {"device": "Y2", "comment": "夹爪", "role": "output"}
+  ],
+  "modes": {
+    "run": "M500",
+    "stop": "M501",
+    "auto": "M521",
+    "manual": "M522"
+  },
+  "common": {
+    "handshake_base": 1000,
+    "alarm_base": 2000,
+    "alarm_timer_base": 10,
+    "start_step": 0,
+    "station_step_base": 100,
+    "station_step_stride": 100,
+    "step_increment": 10,
+    "auto_rungs": true
+  },
+  "segments": [
+    {
+      "title": "初始化",
+      "kind": "init",
+      "rungs": [
+        {
+          "comment": "初始脉冲置待机步",
+          "instructions": [
+            {"op": "LD", "operands": ["SM402"]},
+            {"op": "SET", "operands": ["S0"]}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "取放站",
+      "kind": "station",
+      "step_range": [100, 199],
+      "entry_conditions": ["S0", "X0"],
+      "handshake": {
+        "out": [{"device": "M1000", "comment": "取放站/完成"}],
+        "shift": ["M1001"]
+      },
+      "steps": [
+        {
+          "step": 100,
+          "actions": [
+            {"set": ["Y0"], "comment": "竖直缸下降"}
+          ],
+          "transition": {"conditions": ["X3"], "next": 110, "comment": "到位 -> 夹紧"}
+        },
+        {
+          "step": 110,
+          "actions": [
+            {"set": ["Y2"], "comment": "夹紧工件"}
+          ],
+          "transition": {"conditions": ["X7"], "next": 120, "comment": "夹紧到位"}
+        },
+        {
+          "step": 120,
+          "actions": [
+            {"instructions": [{"op": "OUT", "operands": ["T0", "K20"]}], "comment": "延时2s"}
+          ],
+          "transition": {"conditions": ["T0"], "next": 130, "comment": "延时到"}
+        },
+        {
+          "step": 130,
+          "actions": [
+            {"reset": ["Y0"], "comment": "竖直缸上升"}
+          ],
+          "transition": {"conditions": ["X2"], "next": 140, "comment": "原位"}
+        },
+        {
+          "step": 140,
+          "actions": [
+            {"set": ["Y1"], "comment": "水平缸右移"}
+          ],
+          "transition": {"conditions": ["X5"], "next": 150, "comment": "到位"}
+        },
+        {
+          "step": 150,
+          "actions": [
+            {"reset": ["Y2"], "comment": "松开"}
+          ],
+          "transition": {"conditions": ["X6"], "next": 160, "comment": "松开到位"}
+        },
+        {
+          "step": 160,
+          "actions": [
+            {"reset": ["Y1"], "comment": "水平缸左移"}
+          ],
+          "transition": {"conditions": ["X4"], "next": null, "comment": "完成回待机"}
+        }
+      ]
+    },
+    {
+      "title": "启动停止",
+      "kind": "common",
+      "rungs": [
+        {
+          "comment": "启动 -> 运行中 + 自动",
+          "instructions": [
+            {"op": "LD", "operands": ["X0"]},
+            {"op": "SET", "operands": ["M500"]},
+            {"op": "SET", "operands": ["M521"]}
+          ]
+        },
+        {
+          "comment": "停止 -> 复位运行/自动",
+          "instructions": [
+            {"op": "LD", "operands": ["X1"]},
+            {"op": "RST", "operands": ["M500"]},
+            {"op": "RST", "operands": ["M521"]}
+          ]
+        }
+      ]
+    }
+  ],
+  "alarms": {
+    "enabled": true,
+    "base": 2000,
+    "timer_base": 10,
+    "delay": 20,
+    "reset_device": "X1",
+    "cylinders": [
+      {"name": "竖直缸", "output": "Y0", "on_sensor": "X3", "home_sensor": "X2"},
+      {"name": "水平缸", "output": "Y1", "on_sensor": "X5", "home_sensor": "X4"},
+      {"name": "夹爪", "output": "Y2", "on_sensor": "X7", "home_sensor": "X6"}
+    ]
+  },
+  "assumptions": [
+    "取放站进入条件按 S0 & X0（启动）处理",
+    "停止按钮 X1 兼作报警清除，待现场确认",
+    "气缸到位/原位报警延时 2s（K20），待确认",
+    "交接信号与移位标志为建议命名，需按现场 M 点表调整"
+  ],
+  "notes": []
+}

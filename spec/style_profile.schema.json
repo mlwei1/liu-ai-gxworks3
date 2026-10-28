@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gx3gen.local/style_profile.schema.json",
+  "title": "gx3gen StyleProfile",
+  "type": "object",
+  "required": ["profile_version", "name"],
+  "additionalProperties": true,
+  "properties": {
+    "profile_version": { "const": "0.1" },
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "created_at": { "type": "string" },
+    "source_files": { "type": "array", "items": { "type": "string" } },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "order": { "type": "integer" },
+          "title": { "type": "string" },
+          "network_count": { "type": "integer" },
+          "has_stl": { "type": "boolean" }
+        }
+      }
+    },
+    "step_ranges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "segment": { "type": "string" },
+          "start": { "type": "integer" },
+          "end": { "type": "integer" },
+          "count": { "type": "integer" }
+        }
+      }
+    },
+    "modes": { "type": "object", "additionalProperties": true },
+    "alarm": { "type": "object", "additionalProperties": true },
+    "handshake": { "type": "object", "additionalProperties": true },
+    "naming": { "type": "object", "additionalProperties": true },
+    "device_ranges": { "type": "object", "additionalProperties": true },
+    "instruction_mix": { "type": "object", "additionalProperties": { "type": "integer" } },
+    "comment_stats": { "type": "object", "additionalProperties": true },
+    "step_strategy": { "type": "object", "additionalProperties": true },
+    "templates": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+  }
+}

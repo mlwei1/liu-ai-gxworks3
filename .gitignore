@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+workspace/
+out-demo/
+out/
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+mcp.json
+.mcp.json
+.pytest_cache/
+.mypy_cache/
+*.egg-info/

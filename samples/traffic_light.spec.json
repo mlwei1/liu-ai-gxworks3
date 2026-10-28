@@ -1,0 +1,397 @@
+{
+  "spec_version": "0.1",
+  "project": {
+    "name": "双向红绿灯",
+    "cpu": "FX5U",
+    "gx_version": "1.082",
+    "style_profile": null
+  },
+  "io": [
+    {
+      "device": "X0",
+      "comment": "启动",
+      "role": "input"
+    },
+    {
+      "device": "X1",
+      "comment": "停止",
+      "role": "input"
+    },
+    {
+      "device": "Y0",
+      "comment": "东西红灯",
+      "role": "output"
+    },
+    {
+      "device": "Y1",
+      "comment": "东西黄灯",
+      "role": "output"
+    },
+    {
+      "device": "Y2",
+      "comment": "东西绿灯",
+      "role": "output"
+    },
+    {
+      "device": "Y3",
+      "comment": "南北红灯",
+      "role": "output"
+    },
+    {
+      "device": "Y4",
+      "comment": "南北黄灯",
+      "role": "output"
+    },
+    {
+      "device": "Y5",
+      "comment": "南北绿灯",
+      "role": "output"
+    }
+  ],
+  "modes": {
+    "run": "M500",
+    "stop": "M501",
+    "auto": "M521",
+    "manual": "M522"
+  },
+  "common": {
+    "handshake_base": 1000,
+    "alarm_base": 2000,
+    "alarm_timer_base": 10,
+    "start_step": 0,
+    "station_step_base": 100,
+    "station_step_stride": 100,
+    "step_increment": 10,
+    "auto_rungs": true
+  },
+  "segments": [
+    {
+      "title": "初始化",
+      "kind": "init",
+      "rungs": [
+        {
+          "comment": "初始脉冲置待机步",
+          "instructions": [
+            {
+              "op": "LD",
+              "operands": [
+                "SM402"
+              ]
+            },
+            {
+              "op": "SET",
+              "operands": [
+                "S0"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "启动停止",
+      "kind": "common",
+      "rungs": [
+        {
+          "comment": "启动：置运行中/自动",
+          "instructions": [
+            {
+              "op": "LD",
+              "operands": [
+                "X0"
+              ]
+            },
+            {
+              "op": "SET",
+              "operands": [
+                "M500"
+              ]
+            },
+            {
+              "op": "SET",
+              "operands": [
+                "M521"
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "停止：复位运行中/自动，复位步并回待机",
+          "instructions": [
+            {
+              "op": "LD",
+              "operands": [
+                "X1"
+              ]
+            },
+            {
+              "op": "RST",
+              "operands": [
+                "M500"
+              ]
+            },
+            {
+              "op": "RST",
+              "operands": [
+                "M521"
+              ]
+            },
+            {
+              "op": "ZRST",
+              "operands": [
+                "S10",
+                "S69"
+              ]
+            },
+            {
+              "op": "SET",
+              "operands": [
+                "S0"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "自动流程",
+      "kind": "station",
+      "step_range": [
+        10,
+        69
+      ],
+      "entry_conditions": [
+        "S0",
+        "M500"
+      ],
+      "steps": [
+        {
+          "step": 10,
+          "comment": "东西绿/南北红",
+          "actions": [
+            {
+              "comment": "东西绿/南北红，25s",
+              "set": [
+                "Y2",
+                "Y3"
+              ],
+              "reset": [
+                "Y0",
+                "Y1",
+                "Y4",
+                "Y5"
+              ],
+              "instructions": [
+                {
+                  "op": "OUT",
+                  "operands": [
+                    "T0",
+                    "K250"
+                  ]
+                }
+              ]
+            }
+          ],
+          "transition": {
+            "conditions": [
+              "T0"
+            ],
+            "next": 20,
+            "comment": "定时到 → S20"
+          }
+        },
+        {
+          "step": 20,
+          "comment": "东西黄/南北红",
+          "actions": [
+            {
+              "comment": "东西黄/南北红，3s",
+              "set": [
+                "Y1",
+                "Y3"
+              ],
+              "reset": [
+                "Y0",
+                "Y2",
+                "Y4",
+                "Y5"
+              ],
+              "instructions": [
+                {
+                  "op": "OUT",
+                  "operands": [
+                    "T1",
+                    "K30"
+                  ]
+                }
+              ]
+            }
+          ],
+          "transition": {
+            "conditions": [
+              "T1"
+            ],
+            "next": 30,
+            "comment": "定时到 → S30"
+          }
+        },
+        {
+          "step": 30,
+          "comment": "全红",
+          "actions": [
+            {
+              "comment": "全红，2s",
+              "set": [
+                "Y0",
+                "Y3"
+              ],
+              "reset": [
+                "Y1",
+                "Y2",
+                "Y4",
+                "Y5"
+              ],
+              "instructions": [
+                {
+                  "op": "OUT",
+                  "operands": [
+                    "T2",
+                    "K20"
+                  ]
+                }
+              ]
+            }
+          ],
+          "transition": {
+            "conditions": [
+              "T2"
+            ],
+            "next": 40,
+            "comment": "定时到 → S40"
+          }
+        },
+        {
+          "step": 40,
+          "comment": "东西红/南北绿",
+          "actions": [
+            {
+              "comment": "东西红/南北绿，20s",
+              "set": [
+                "Y0",
+                "Y5"
+              ],
+              "reset": [
+                "Y1",
+                "Y2",
+                "Y3",
+                "Y4"
+              ],
+              "instructions": [
+                {
+                  "op": "OUT",
+                  "operands": [
+                    "T3",
+                    "K200"
+                  ]
+                }
+              ]
+            }
+          ],
+          "transition": {
+            "conditions": [
+              "T3"
+            ],
+            "next": 50,
+            "comment": "定时到 → S50"
+          }
+        },
+        {
+          "step": 50,
+          "comment": "东西红/南北黄",
+          "actions": [
+            {
+              "comment": "东西红/南北黄，3s",
+              "set": [
+                "Y0",
+                "Y4"
+              ],
+              "reset": [
+                "Y1",
+                "Y2",
+                "Y3",
+                "Y5"
+              ],
+              "instructions": [
+                {
+                  "op": "OUT",
+                  "operands": [
+                    "T4",
+                    "K30"
+                  ]
+                }
+              ]
+            }
+          ],
+          "transition": {
+            "conditions": [
+              "T4"
+            ],
+            "next": 60,
+            "comment": "定时到 → S60"
+          }
+        },
+        {
+          "step": 60,
+          "comment": "全红（循环前）",
+          "actions": [
+            {
+              "comment": "全红（循环前），2s",
+              "set": [
+                "Y0",
+                "Y3"
+              ],
+              "reset": [
+                "Y1",
+                "Y2",
+                "Y4",
+                "Y5"
+              ],
+              "instructions": [
+                {
+                  "op": "OUT",
+                  "operands": [
+                    "T5",
+                    "K20"
+                  ]
+                }
+              ]
+            }
+          ],
+          "transition": {
+            "conditions": [
+              "T5",
+              "M500"
+            ],
+            "next": 10,
+            "comment": "全红结束 → 回到 S10（自动循环）"
+          }
+        }
+      ]
+    }
+  ],
+  "alarms": {
+    "enabled": false,
+    "base": 2000,
+    "timer_base": 10,
+    "cylinders": []
+  },
+  "assumptions": [
+    "相位时长（秒）：东西绿 25 / 东西黄 3 / 全红 2 / 南北绿 20 / 南北黄 3 / 全红 2（从需求解析，K 值=秒×10）",
+    "停止处理：X1 复位运行中 M500、ZRST S10–S69 并回待机步 S0；未包含黄闪、夜间模式、灯故障检测/报警，如需请补充",
+    "自动流程为单一循环（S10→S20→S30→S40→S50→S60→S10），如需行人请求/紧急车辆优先请补充 IO 与工艺",
+    "未识别到手/自动切换旋钮；如需手动模式请补充 IO 与动作"
+  ],
+  "notes": [
+    "领域模板：双向红绿灯（规则生成；AI Agent 可在此基础上按现场修改）"
+  ]
+}

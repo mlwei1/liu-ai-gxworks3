@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gx3gen · GX Works3 程序初稿助手</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="banner" class="banner hidden" role="alert"></div>
+
+<div class="layout">
+  <!-- ======================= 左侧：项目列表 ======================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">GX</div>
+      <div class="brand-text">
+        <h1>gx3gen</h1>
+        <p>FX5U 程序初稿助手</p>
+      </div>
+    </div>
+
+    <div class="create-box">
+      <input id="new-project-name" type="text" maxlength="60" autocomplete="off"
+             placeholder="新项目名称，如：阀体装配线">
+      <button id="btn-create-project" class="btn primary" type="button">新建项目</button>
+    </div>
+
+    <div class="sidebar-title">项目列表</div>
+    <ul id="project-list" class="project-list">
+      <li class="empty-li">还没有项目，先新建一个。</li>
+    </ul>
+
+    <div class="sidebar-foot">
+      本机运行 · 数据保存在 <code>workspace/</code><br>
+      <span id="app-version"></span>
+    </div>
+  </aside>
+
+  <!-- ======================= 右侧：主区 ======================= -->
+  <main class="main">
+    <nav class="stepbar" id="stepbar" aria-label="工作步骤">
+      <button class="step-btn active" data-step="style" type="button"><span class="step-no">1</span>风格</button>
+      <button class="step-btn" data-step="requirement" type="button"><span class="step-no">2</span>需求 / IO</button>
+      <button class="step-btn" data-step="plan" type="button"><span class="step-no">3</span>架构确认</button>
+      <button class="step-btn" data-step="generate" type="button"><span class="step-no">4</span>生成</button>
+      <button class="step-btn" data-step="review" type="button"><span class="step-no">5</span>审阅 / 反馈</button>
+      <button class="step-btn" data-step="settings" type="button"><span class="step-no">6</span>设置</button>
+    </nav>
+
+    <div id="current-project" class="current-project hidden"></div>
+
+    <div class="sections">
+      <!-- ------------------------- ① 风格 ------------------------- -->
+      <section class="section" data-section="style">
+        <header class="section-head">
+          <h2>① 学习你的编程风格</h2>
+          <p>上传 GX Works3 导出的「程序本体 CSV」（可再附「软元件注释 CSV」）。软件统计段结构、步号段、模式位、报警布局、命名与指令习惯，生成 StyleProfile 供规划与生成使用。</p>
+        </header>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>导入历史程序</h3>
+            <label class="field">
+              <span>风格名称</span>
+              <input id="style-name" type="text" autocomplete="off" placeholder="如：用户风格-A（留空自动命名）">
+            </label>
+            <label class="field">
+              <span>CSV 文件（可多选：程序本体 + 注释表，支持 UTF-16/UTF-8/GBK）</span>
+              <input id="style-files" type="file" multiple accept=".csv,.txt">
+            </label>
+            <div id="style-file-hint" class="hint">尚未选择文件</div>
+            <div class="button-row">
+              <button id="btn-style-import" class="btn primary" type="button">导入并学习风格</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>风格库</h3>
+            <div id="style-library" class="style-library">
+              <div class="empty">还没有学习过风格。</div>
+            </div>
+            <div class="button-row">
+              <button id="btn-style-apply" class="btn" type="button" disabled>设为当前项目风格</button>
+            </div>
+            <p class="hint">当前项目风格：<span id="current-style-name">未设置</span></p>
+          </div>
+        </div>
+
+        <div class="card hidden" id="style-result-card">
+          <h3>学习结果 <span id="style-result-name" class="muted"></span></h3>
+          <div id="style-result" class="style-result"></div>
+        </div>
+      </section>
+
+      <!-- ------------------------- ② 需求 / IO ------------------------- -->
+      <section class="section hidden" data-section="requirement">
+        <header class="section-head">
+          <h2>② 输入需求与 IO 表</h2>
+          <p>用中文描述工位/动作/互锁，粘贴或上传 IO 表；然后让软件先给出「程序架构方案」，确认后再生成程序。</p>
+        </header>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>中文需求</h3>
+            <textarea id="requirement" rows="8" spellcheck="false"
+              placeholder="例如：三工位装配线。上料站：按下启动按钮 X0，Y0 上料气缸伸出，到位 X1 后缩回并进入压装站；压装站……；需要启动/停止、自动/手动、急停复位、气缸原位/到位报警。"></textarea>
+
+            <h3>IO 表</h3>
+            <p class="hint">直接粘贴 CSV（列：序号 / 软元件名 / 注释 / 类型，Tab 或逗号分隔均可），或上传 GX Works3 导出的文件。</p>
+            <textarea id="io-text" rows="10" spellcheck="false"
+              placeholder="序号,软元件名,注释,类型&#10;1,X0,启动按钮,输入&#10;2,X1,停止按钮,输入&#10;3,Y0,上料气缸,输出"></textarea>
+            <div class="file-row">
+              <input id="io-files" type="file" multiple accept=".csv,.txt">
+              <button id="btn-io-parse" class="btn small" type="button">解析 IO 表</button>
+            </div>
+            <div id="io-preview" class="table-wrap hidden"></div>
+            <div class="button-row">
+              <button id="btn-save-requirement" class="btn" type="button">保存需求与 IO</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>选择风格</h3>
+            <label class="field">
+              <span>生成时套用的历史风格（可选）</span>
+              <select id="requirement-style-select">
+                <option value="">不使用历史风格</option>
+              </select>
+            </label>
+
+            <h3>生成程序架构方案</h3>
+            <p class="hint">规则解析完全本地、确定性；AI 解析需要先在「设置」里配置 OpenAI 兼容接口（base_url / model / api_key），未配置时会自动回退为规则解析。</p>
+            <div class="button-row">
+              <button id="btn-plan-rule" class="btn" type="button">规则解析</button>
+              <button id="btn-plan-ai" class="btn primary" type="button">AI 解析</button>
+            </div>
+            <p class="hint">生成的是 ProgramSpec（段清单 / 步号段 / IO 分配 / 握手 / 报警 / 待确认问题），下一步可以手工修改 JSON 后再确认。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------- ③ 架构确认 ------------------------- -->
+      <section class="section hidden" data-section="plan">
+        <header class="section-head">
+          <h2>③ 确认程序架构</h2>
+          <p>ProgramSpec 是程序级语义契约。可直接编辑 JSON，校验通过后保存；确认无误再生成正式程序。</p>
+        </header>
+
+        <div class="grid-2 grid-plan">
+          <div class="card">
+            <h3>ProgramSpec（可编辑 JSON）</h3>
+            <textarea id="spec-json" class="code" rows="26" spellcheck="false"
+              placeholder="还没有架构方案。请回到「② 需求 / IO」点击「规则解析」或「AI 解析」。"></textarea>
+            <div class="button-row">
+              <button id="btn-spec-validate" class="btn small" type="button">校验 JSON</button>
+              <button id="btn-spec-format" class="btn small" type="button">格式化</button>
+              <button id="btn-spec-save" class="btn" type="button">保存架构</button>
+              <button id="btn-spec-generate" class="btn primary" type="button">保存并生成程序</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>待确认事项（assumptions）</h3>
+            <ul id="plan-assumptions" class="list"><li class="empty-li">暂无</li></ul>
+            <h3>历史经验检查清单</h3>
+            <ul id="plan-checklist" class="list"><li class="empty-li">暂无</li></ul>
+            <h3>规划提示（prompt_hint）</h3>
+            <pre id="plan-prompt-hint" class="pre">暂无</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------- ④ 生成 ------------------------- -->
+      <section class="section hidden" data-section="generate">
+        <header class="section-head">
+          <h2>④ 生成程序</h2>
+          <p>输出 4 个文件：程序本体 CSV（可导入 GX Works3）、软元件注释 CSV、网络表、生成报告。导入后请在 GX Works3 中「全部转换」并由工程师收尾。</p>
+        </header>
+
+        <div class="card">
+          <div class="button-row">
+            <button id="btn-generate" class="btn primary" type="button">生成程序（4 个文件）</button>
+            <button id="btn-goto-review" class="btn" type="button">去审阅 / 反馈</button>
+          </div>
+
+          <div id="generate-empty" class="empty">还没有生成结果。确认架构后点击上面的「生成程序」。</div>
+
+          <div id="generate-result" class="hidden">
+            <div id="generate-stats" class="stat-grid"></div>
+
+            <h3>生成摘要</h3>
+            <p id="generate-summary" class="pre-line"></p>
+
+            <h3>段 / 网络结构</h3>
+            <div id="generate-segments" class="table-wrap"></div>
+
+            <h3>待确认假设</h3>
+            <ul id="generate-assumptions" class="list"></ul>
+
+            <h3>检查提示</h3>
+            <ul id="generate-lint" class="list"></ul>
+
+            <h3>下载产物</h3>
+            <div id="generate-artifacts" class="artifact-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------- ⑤ 审阅 / 反馈 ------------------------- -->
+      <section class="section hidden" data-section="review">
+        <header class="section-head">
+          <h2>⑤ 审阅与反馈</h2>
+          <p>程序导入 GX Works3、转换并修改后，把发现的问题标到具体段/网络。下一轮规划与生成会把高频问题变成检查清单和提示，避免同类错误重复出现。</p>
+        </header>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>生成结果概览</h3>
+            <div id="review-segments" class="table-wrap"><div class="empty">还没有生成结果。</div></div>
+            <h3>下载产物</h3>
+            <div id="review-artifacts" class="artifact-list"><div class="empty">暂无</div></div>
+          </div>
+
+          <div class="card">
+            <h3>提交反馈</h3>
+            <label class="field">
+              <span>反馈对象</span>
+              <select id="feedback-target-kind">
+                <option value="segment">某一段</option>
+                <option value="network">某一段中的网络</option>
+                <option value="program">整个程序</option>
+              </select>
+            </label>
+            <label class="field" id="feedback-segment-field">
+              <span>段</span>
+              <select id="feedback-segment"></select>
+            </label>
+            <label class="field hidden" id="feedback-network-field">
+              <span>网络序号（从 0 开始）</span>
+              <input id="feedback-network" type="number" min="0" value="0">
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>类别</span>
+                <select id="feedback-category">
+                  <option>结构</option>
+                  <option>命名</option>
+                  <option>逻辑</option>
+                  <option>互锁</option>
+                  <option>报警</option>
+                  <option>停止</option>
+                  <option>其他</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>严重级</span>
+                <select id="feedback-severity">
+                  <option value="error">error（必须改）</option>
+                  <option value="warning" selected>warning（建议改）</option>
+                  <option value="suggestion">suggestion（可优化）</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span>问题说明</span>
+              <textarea id="feedback-message" rows="3" placeholder="例如：缺少压装站到检测站的交接信号；停止后气缸未复位。"></textarea>
+            </label>
+            <label class="field">
+              <span>期望做法（可选）</span>
+              <input id="feedback-expected" type="text" placeholder="例如：M1110 压装→检测 / 送料完成，用 SET/RST 配对">
+            </label>
+            <div class="button-row">
+              <button id="btn-feedback-submit" class="btn primary" type="button">提交反馈</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3>反馈记录 / 派生经验</h3>
+            <div id="feedback-list" class="list"><div class="empty">暂无反馈。</div></div>
+            <div class="button-row">
+              <button id="btn-feedback-refresh" class="btn small" type="button">刷新</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>根据反馈优化并重新生成</h3>
+            <p class="hint">把反馈聚合成 lessons / 检查清单，注入规划与生成（不训练模型），然后按新经验重新生成一版。</p>
+            <div class="button-row">
+              <button id="btn-optimize" class="btn" type="button">仅应用经验</button>
+              <button id="btn-optimize-regenerate" class="btn primary" type="button">应用经验并重新生成</button>
+            </div>
+            <h3>本轮检查清单</h3>
+            <ul id="optimize-checklist" class="list"><li class="empty-li">暂无</li></ul>
+            <h3>规划提示（prompt_hint）</h3>
+            <pre id="optimize-prompt-hint" class="pre">暂无</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------- ⑥ 设置 ------------------------- -->
+      <section class="section hidden" data-section="settings">
+        <header class="section-head">
+          <h2>⑥ 设置</h2>
+          <p>可选：配置 OpenAI 兼容的大模型接口，让「AI 解析」把中文需求解析成 ProgramSpec。规则解析不需要任何配置。</p>
+        </header>
+
+        <div class="card narrow">
+          <h3>LLM 接口（OpenAI 兼容）</h3>
+          <label class="field">
+            <span>base_url</span>
+            <input id="cfg-base-url" type="text" autocomplete="off" placeholder="如 https://api.example.com/v1">
+          </label>
+          <label class="field">
+            <span>model</span>
+            <input id="cfg-model" type="text" autocomplete="off" placeholder="如 gpt-4o-mini / deepseek-chat">
+          </label>
+          <label class="field">
+            <span>api_key（只保存在本机；留空表示不修改已保存的密钥）</span>
+            <input id="cfg-api-key" type="password" autocomplete="off" placeholder="sk-...">
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>timeout（秒）</span>
+              <input id="cfg-timeout" type="number" min="5" max="600" step="1">
+            </label>
+            <label class="field">
+              <span>temperature</span>
+              <input id="cfg-temperature" type="number" min="0" max="2" step="0.1">
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="btn-save-config" class="btn primary" type="button">保存设置</button>
+          </div>
+          <p class="hint">配置保存在本机 <code>workspace/config.json</code>。GET 接口不会回显 api_key。</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "gx3gen": {
+      "command": "C:/path/to/python.exe",
+      "args": [
+        "C:/path/to/liu-ai-gxworks3/run_mcp.py"
+      ],
+      "env": {
+        "GX3GEN_WORKSPACE": "C:/path/to/liu-ai-gxworks3/workspace"
+      }
+    }
+  }
+}
