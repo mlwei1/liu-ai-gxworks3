@@ -551,7 +551,7 @@ function renderPlanInfo(plan) {
   const quality = qualityLines(data.quality);
   fillList('#plan-assumptions', quality.concat(data.assumptions || []), '暂无待确认事项');
   fillList('#plan-checklist', data.checklist || [], '暂无历史经验');
-  const plannerLabel = data.planner === 'llm' ? 'AI（LLM）规划' : (data.planner ? '规则规划' : '');
+  const plannerLabel = data.planner === 'llm' ? '本地 LLM 规划（可选）' : (data.planner ? '规则规划' : '');
   $('#plan-prompt-hint').textContent =
     (plannerLabel ? '规划器：' + plannerLabel + '\n' : '') + (data.prompt_hint || '暂无');
   fillList('#optimize-checklist', data.checklist || [], '暂无');
