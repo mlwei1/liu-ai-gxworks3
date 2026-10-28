@@ -76,6 +76,38 @@
 
 ---
 
+## 3.5 场景 B2：查官方/自己上传的手册（按需，不读整本）
+
+手册是"查"的，不是"看"的。项目会把 PDF 建成本地索引，agent 按需查片段并给页码。
+
+### 建索引（一次性，用户可以自己操作）
+
+```bash
+python -m pip install -r requirements-manuals.txt   # 可选，仅建索引需要
+python run.py manual add --path "docs/官方资料/你的手册.pdf" --model FX5U
+python run.py manual list
+```
+
+以后新增手册：把文件放进 `workspace/manuals/inbox/`，或直接 `manual add --path ...`。
+
+### 对话里的用法
+
+```text
+ZRST 指令接受几个操作数？在手册哪一页？
+FX5U 高速计数器的最大频率是多少？请给出手册页码。
+```
+
+agent 会：
+
+1. `gx3gen_manual_search({query, model:"FX5U", top_k:5})`；
+2. 只使用命中片段，回答时引用 **手册 / 章节 / 页码**；
+3. 片段不够时 `gx3gen_manual_read({manual_id, section_id})` 读指定章节；
+4. 没有索引时告诉你运行 `manual add`，不会凭空猜手册内容。
+
+> 不要直接用文件读取工具打开整本 PDF（会撑爆上下文）；索引位于 `workspace/manuals/`，不进 git。
+
+---
+
 ## 4. 场景 C：纠正与迭代
 
 在对话里直接指出问题即可，例如：
@@ -140,5 +172,6 @@ python run.py serve     # http://127.0.0.1:8765
 
 - 不要向用户索要 API Key（agent 自己就是 LLM）；
 - 不要要求用户打开 Web 界面才能继续；
+- 不要用文件读取工具读整本 PDF；手册用 `gx3gen_manual_search/read`，只引用片段和页码；
 - 不要声称已在 GX Works3 编译/仿真通过（CSV 只是待导入初稿）；
 - 不要发明 IO 表/需求里没有的设备。

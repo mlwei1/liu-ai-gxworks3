@@ -149,11 +149,29 @@ def main(argv=None) -> int                 # tools/gx_audit.py 的命令行实�
 生成器生成完 CSV 后自动调用 `audit`，结果字段 `audit` 同时写进 `report.md`；CLI 为
 `python run.py audit --program ... [--comments ...]`；MCP 为 `gx3gen_audit_csv`。
 
+## gx3gen.manual
+
+```python
+# 存储：<workspace>/manuals/manuals.sqlite3 + manifest.json；PDF 解析为可选依赖
+def add_manual(path, title=None, model="", version="", replace=False, max_pages=None) -> dict
+def list_manuals(include_archived=False) -> list[dict]
+def remove_manual(manual_id) -> dict
+def toc(manual_id, depth=3, max_items=300) -> list[dict]
+def read(manual_id, section_id=None, page=None, max_chars=6000) -> dict
+def search(query, manual_id=None, model=None, top_k=5) -> list[dict]
+    # 每项含 manual_title / heading_path / page_start / snippet / citation
+```
+
+索引 = SQLite `manuals/sections/chunks` + FTS5（中文 bigram 预切词）；查询只用标准库。
+CLI：`python run.py manual add/list/search/toc/read/remove`；MCP 为
+`gx3gen_manual_list/search/toc/read`。详见 [docs/MANUALS.md](MANUALS.md)。
+
 ## gx3gen.mcp_server（agent-first 入口）
 
-stdio + 一行一条 JSON-RPC；由 `run_mcp.py` 启动。工具（13 个）：
+stdio + 一行一条 JSON-RPC；由 `run_mcp.py` 启动。工具（17 个）：
 `gx3gen_get_generation_context`、`gx3gen_validate_spec`、`gx3gen_generate_program`、
-`gx3gen_audit_csv`、`gx3gen_create_project`、`gx3gen_save_spec`、`gx3gen_load_spec`、
+`gx3gen_audit_csv`、`gx3gen_manual_list`、`gx3gen_manual_search`、`gx3gen_manual_toc`、
+`gx3gen_manual_read`、`gx3gen_create_project`、`gx3gen_save_spec`、`gx3gen_load_spec`、
 `gx3gen_list_projects`、`gx3gen_get_examples`、`gx3gen_list_styles`、`gx3gen_import_style`、
 `gx3gen_add_feedback`、`gx3gen_get_lessons`。**MCP 不提供项目内 LLM/规划工具，不读 LLM 配置、不需要 API Key。**
 调用说明见 `AGENTS.md` 与 `skills/gx3gen-plc/`。
@@ -254,4 +272,4 @@ GET/POST /api/config                     LLM 配置（可选独立模式；agent
 
 - 一律 `unittest`（本机无 pytest）。
 - 测试不访问网络、不依赖外部语料目录、不写 `workspace/`（用临时目录，通过 `GX3GEN_WORKSPACE` 环境变量重定向）。
-- 至少覆盖：CSV 格式（BOM/引号/续行/END）、spec 校验（含 GX 导入规则）、生成器段/STL 结构、注释表、GX 导入自检、风格画像、反馈 lessons、HTTP API 冒烟。
+- 至少覆盖：CSV 格式（BOM/引号/续行/END）、spec 校验（含 GX 导入规则）、生成器段/STL 结构、注释表、GX 导入自检、手册索引/检索（合成文本 fixture）、风格画像、反馈 lessons、HTTP API 冒烟。

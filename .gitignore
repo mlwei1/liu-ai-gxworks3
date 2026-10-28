@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 venv/
 workspace/
+# 官方/公司手册：版权文件，只在本地建索引，不提交仓库
+docs/官方资料/
 out-demo/
 out/
 *.tmp

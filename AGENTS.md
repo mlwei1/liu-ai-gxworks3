@@ -68,7 +68,21 @@ gx3gen_get_generation_context({"requirement": "<用户需求原文>", "io_csv": 
 ```
 
 返回内容含：ProgramSpec 必需字段与骨架、架构默认（初始化/启动停止/自动流程/手自动/报警）、
-质量红线、红绿灯与三工位示例、IO 表、风格摘要、历史 lessons。
+质量红线、红绿灯与三工位示例、IO 表、风格摘要、历史 lessons，以及**手册库是否已索引**。
+
+**Step 1.5 查手册（按需，不要整本读）**
+
+遇到不熟悉的指令语义、设备范围、错误码、模块用法时：
+
+```json
+gx3gen_manual_list({})
+gx3gen_manual_search({"query": "SET 操作数", "model": "FX5U", "top_k": 5})
+gx3gen_manual_toc({"manual_id": "<id>"})
+gx3gen_manual_read({"manual_id": "<id>", "section_id": 1234, "max_chars": 6000})
+```
+
+只根据命中片段回答，并引用 **手册/章节/页码**；不要用文件读取工具打开整本 PDF。
+没有索引时告诉用户运行 `python run.py manual add --path <手册>`，不要凭空猜手册内容。
 
 **Step 2 你写 ProgramSpec**（不要让用户写）。要点：
 `spec_version:"0.1"`、`project.cpu:"FX5U"`、至少 1 个 `init` 段（`SM402 → SET S0`）+ 1 个 `station` 段
@@ -150,6 +164,10 @@ gx3gen_generate_program({"spec": <spec>, "requirement": "<需求原文>", "name"
 | `gx3gen_validate_spec` | 校验 spec + 质量检查 | `{ok, errors, warnings, suggestions, quality}` |
 | `gx3gen_generate_program` | 生成 4 个产物 | `{ok, program_csv, comment_csv, network_table, report, summary, stats, segments, lint, quality, audit, assumptions}` |
 | `gx3gen_audit_csv` | GX 导入前自检（可复核外部 CSV） | `{ok, problems, program_problems, comment_problems}` |
+| `gx3gen_manual_list` | 列出手册库 | `{manuals:[...]}` |
+| `gx3gen_manual_search` | 手册检索（top-k 片段 + 出处） | `{hits:[{manual_title, heading_path, page_start, snippet, citation}]}` |
+| `gx3gen_manual_toc` | 手册目录 | `{items:[{id,level,heading,page_start,...}]}` |
+| `gx3gen_manual_read` | 读指定章节/页 | `{text, heading_path, page_start, page_end, truncated}` |
 | `gx3gen_create_project` | 建 agent 项目（可选需求/IO） | `{project_id, project_path, spec_path}` |
 | `gx3gen_save_spec` | 保存 ProgramSpec 到项目（写 `spec.json`） | `{ok, spec_path, valid, quality, errors}` |
 | `gx3gen_load_spec` | 读回项目里的 ProgramSpec | `{ok, spec, requirement, io}` |
@@ -201,6 +219,7 @@ GX Works3 落地：打开基座工程副本 → MAIN 程序内 [编辑]→[导�
 - [skills/gx3gen-plc/references/program_spec.md](skills/gx3gen-plc/references/program_spec.md)：ProgramSpec 字段说明
 - [skills/gx3gen-plc/references/quality_checklist.md](skills/gx3gen-plc/references/quality_checklist.md)：质量检查清单
 - [docs/GX_IMPORT_TROUBLESHOOTING.md](docs/GX_IMPORT_TROUBLESHOOTING.md)：GX 导入真实排障复盘
+- [docs/MANUALS.md](docs/MANUALS.md)：手册知识库（建索引/查询/隐私/限制）
 - [tools/gx_audit.py](tools/gx_audit.py)：GX 导入前自检（或 `python run.py audit ...`）
 - [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)：完整示例会话 + MCP 配置
 - [docs/INTERFACES.md](docs/INTERFACES.md)、[docs/CSV_FORMAT.md](docs/CSV_FORMAT.md)：模块接口与 GX CSV 格式

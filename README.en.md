@@ -9,7 +9,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-162%20passing-brightgreen.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen.svg)](#tests)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7b61ff.svg)](run_mcp.py)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -34,10 +34,11 @@ results. You only describe the requirement and provide the IO list.
 
 | Layer | Files | Purpose |
 |---|---|---|
-| **Agent integration** | [`AGENTS.md`](AGENTS.md), [`skills/gx3gen-plc/`](skills/gx3gen-plc/), [`run_mcp.py`](run_mcp.py) | MCP server (13 tools) + skill + agent handbook; works with any MCP-capable agent |
+| **Agent integration** | [`AGENTS.md`](AGENTS.md), [`skills/gx3gen-plc/`](skills/gx3gen-plc/), [`run_mcp.py`](run_mcp.py) | MCP server (17 tools) + skill + agent handbook; works with any MCP-capable agent |
 | **Planning layer** | [`src/gx3gen/planner/`](src/gx3gen/planner/) | Rule parser, domain templates; the in-project LLM is only an **optional standalone adapter** (not used in agent mode) |
 | **Quality gate** | [`src/gx3gen/quality.py`](src/gx3gen/quality.py) | Structural checks + requirement red lines; blocks junk before generation |
 | **GX import audit** | [`src/gx3gen/audit.py`](src/gx3gen/audit.py), [`tools/gx_audit.py`](tools/gx_audit.py) | Post-generation/pre-import checks: BOM, line endings, operand counts, IL sequence, STL-RETSTL, comment title |
+| **Manual knowledge base** | [`src/gx3gen/manual/`](src/gx3gen/manual/), [`docs/MANUALS.md`](docs/MANUALS.md) | Official/user manuals → local FTS5 index → agent looks up snippets with manual/section/page; never dumps whole PDFs into context |
 | **Domain templates** | [`src/gx3gen/domains.py`](src/gx3gen/domains.py) | Built-in two-way traffic light template (6 phases, timers, loop, start/stop) |
 | **Deterministic compiler** | [`src/gx3gen/generator/`](src/gx3gen/generator/), [`src/gx3gen/ilcsv/`](src/gx3gen/ilcsv/) | `ProgramSpec` → segments/STL → IL → official GX CSV (UTF-16LE+BOM, TAB, QUOTE_ALL, CRLF, 7 cols, END) |
 | **Style learning** | [`src/gx3gen/style/`](src/gx3gen/style/) | Learn segment structure, step ranges, mode bits, alarms, handshake naming from your own GX CSVs |
@@ -62,7 +63,7 @@ results. You only describe the requirement and provide the IO list.
 ```bash
 git clone https://github.com/mlwei1/liu-ai-gxworks3.git
 cd liu-ai-gxworks3
-python -m unittest discover -s tests -t .     # 162 tests, no network
+python -m unittest discover -s tests -t .     # 167 tests, no network
 ```
 
 ### A. AI agent + MCP (recommended)
@@ -99,6 +100,7 @@ Available MCP tools:
 | `gx3gen_validate_spec` | Validate structure + run the quality gate |
 | `gx3gen_generate_program` | Generate the 4 artifacts (program CSV, comment CSV, network table, report) and run a GX import audit |
 | `gx3gen_audit_csv` | Pre-import audit (format/operands/IL/STL/comment title); can check external CSVs |
+| `gx3gen_manual_list/toc/search/read` | Manual knowledge base: search snippets / read a section with citations; no whole-PDF dumping |
 | `gx3gen_create_project` / `gx3gen_save_spec` / `gx3gen_load_spec` / `gx3gen_list_projects` | Project + `spec.json` handoff (agent and optional web UI share the same workspace) |
 | `gx3gen_get_examples` | Traffic-light / three-station examples |
 | `gx3gen_list_styles` / `gx3gen_import_style` | Manage style profiles learned from your GX CSVs |
@@ -122,7 +124,25 @@ python run.py style import --program-csv "program.csv" --comment-csv "comments.c
 > `plan` uses rules/domain templates by default; `plan --llm` is an optional non-agent mode.
 > In agent mode the agent writes the ProgramSpec itself.
 
-### C. Experimental: local web review UI (not the main flow)
+### C. Manual knowledge base (look up, don't read whole PDFs)
+
+```bash
+# Build an index (only indexing needs optional PyMuPDF; querying is stdlib-only)
+python -m pip install -r requirements-manuals.txt
+python run.py manual add --path "docs/官方资料/your-manual.pdf" --model FX5U
+
+# Look up
+python run.py manual list
+python run.py manual search "SET 操作数"
+python run.py manual toc <manual_id>
+python run.py manual read <manual_id> --section 1234
+```
+
+- Official/company manuals must not be committed (`.gitignore` covers `docs/官方资料/` and `workspace/`).
+- The agent uses `gx3gen_manual_list/toc/search/read` and cites **manual / section / page**.
+- See [docs/MANUALS.md](docs/MANUALS.md) for indexing/privacy/limitations.
+
+### D. Experimental: local web review UI (not the main flow)
 
 > **Not required for the main flow; no API key needed.** This layer is only for human review,
 > diff, CSV download and feedback capture. Pure-chat users can skip it entirely; it can be removed later.
@@ -204,9 +224,9 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 ├── docs/                     # architecture, product loop, CSV format, agent workflow, status …
 ├── spec/                     # ProgramSpec / StyleProfile JSON schemas
 ├── samples/                  # three-station + two-way traffic-light examples
-├── src/gx3gen/               # Python package (planner, generator, ilcsv, style, feedback, app, MCP)
+├── src/gx3gen/               # Python package (planner, generator, ilcsv, style, feedback, manual, app, MCP)
 ├── web/                      # experimental single-page review UI (no build, no CDN; not the main flow)
-├── tests/                    # 162 unittest cases
+├── tests/                    # 167 unittest cases
 └── workspace/                # runtime data (projects/styles/artifacts; git-ignored)
 ```
 
@@ -214,7 +234,7 @@ See [`samples/traffic_light.spec.json`](samples/traffic_light.spec.json).
 
 ```bash
 python -m unittest discover -s tests -t .
-# Ran 162 tests ... OK
+# Ran 167 tests ... OK
 ```
 
 Coverage includes: GX CSV encoding/quoting/continuation/END, ProgramSpec validation (incl. SET/RST
@@ -256,6 +276,7 @@ config, and needs no API key.**
 - [docs/FEEDBACK_LOOP.md](docs/FEEDBACK_LOOP.md) — feedback loop
 - [docs/INTERFACES.md](docs/INTERFACES.md) — module interfaces
 - [docs/STATUS.md](docs/STATUS.md) — implementation status
+- [docs/MANUALS.md](docs/MANUALS.md) — manual knowledge base (indexing/query/privacy/limitations)
 
 ## License
 

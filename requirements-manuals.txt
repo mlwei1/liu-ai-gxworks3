@@ -1,0 +1,3 @@
+# 可选：手册建索引依赖（只有“建索引”需要；查询只用标准库 sqlite3）
+# 安装：python -m pip install -r requirements-manuals.txt
+pymupdf>=1.24

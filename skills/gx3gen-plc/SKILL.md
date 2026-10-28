@@ -37,6 +37,7 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 | 校验你写的 spec | `gx3gen_validate_spec({spec, requirement})` |
 | 生成程序 | `gx3gen_generate_program({spec, requirement, name?, out_dir?, force?})` → 结果含 `audit` |
 | GX 导入前自检 | `gx3gen_audit_csv({program_csv_path, comment_csv_path?, expect_comment_title?})` |
+| 查手册（按需） | `gx3gen_manual_search({query, model?, top_k?})` → `gx3gen_manual_read({manual_id, section_id?/page?})`；先 `manual_list/toc` |
 | 看红绿灯/三工位示例 | `gx3gen_get_examples({kind})` |
 | 学用户风格 | `gx3gen_import_style({program_csv_path, comment_csv_path?, name?})` → 后续传 `style_id` |
 | 记录纠错反馈 | `gx3gen_add_feedback({project_id, target, category, severity, message, expected?})` |
@@ -53,6 +54,7 @@ description: 用 gx3gen 工具包为三菱 FX5U / GX Works3 生成 PLC 程序初
 ```
 0 收集：工位/动作顺序、互锁、延时、启停/急停、手自动、报警、IO 表（缺则问）
 1 上下文：gx3gen_get_generation_context（必读）
+1.5 查手册：不熟悉的指令/设备/错误码用 gx3gen_manual_search；只引用片段和页码，不整本读
 2 写 ProgramSpec（结构见 references/program_spec.md）
 2.5（可选）create_project + save_spec：项目可回看、Web 可审阅
 3 校验：gx3gen_validate_spec → 修到 ok=true && quality.ok=true
@@ -97,6 +99,7 @@ GX 导入硬约束（违反会导入失败，详见 docs/GX_IMPORT_TROUBLESHOOTI
 | `SpecError` 报 `SET/RST 操作数个数` | 拆成多条单操作数指令（`SET M500` + `SET M521`） |
 | `SpecError` 报 `LD/LDI 紧跟在...` | 串联改 `AND`、串联取反改 `ANI`；步内动作别以 LD/LDI 开头 |
 | 注释导入报「注释标题不存在」 | 注释 CSV 用 LF；`project.comment_title` 设为目标工程实际标题 |
+| 手册知识库为空 | 用户运行 `python run.py manual add --path <手册>`；不要用文件工具读整本 PDF |
 | `SpecError` 字段路径报错 | cpu 必须 `FX5U`；设备号合法；同段 step 递增不重复；segments 非空 |
 | `未知工具` / `Method not found` | MCP 客户端没连到本项目 `run_mcp.py`；工具名见上表 |
 | `plan`/`create_project` 报错 | 先 `gx3gen_create_project` 建项目；不需要 API Key（agent 就是 LLM） |
@@ -111,4 +114,5 @@ GX 导入硬约束（违反会导入失败，详见 docs/GX_IMPORT_TROUBLESHOOTI
 - [docs/AGENT_WORKFLOW.md](../../docs/AGENT_WORKFLOW.md)：完整示例会话（双向红绿灯）
 - [docs/CSV_FORMAT.md](../../docs/CSV_FORMAT.md)：GX Works3 程序 CSV 格式与导入步骤
 - [docs/GX_IMPORT_TROUBLESHOOTING.md](../../docs/GX_IMPORT_TROUBLESHOOTING.md)：GX 导入真实排障复盘
+- [docs/MANUALS.md](../../docs/MANUALS.md)：手册知识库（建索引/检索/隐私/限制）
 - [tools/gx_audit.py](../../tools/gx_audit.py)：GX 导入前自检

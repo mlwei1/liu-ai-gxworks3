@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#环境要求)
-[![Tests](https://img.shields.io/badge/tests-162%20passing-brightgreen.svg)](#测试)
+[![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen.svg)](#测试)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7b61ff.svg)](run_mcp.py)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -29,10 +29,11 @@
 
 | 层 | 文件 | 作用 |
 |---|---|---|
-| **Agent 接入** | [`AGENTS.md`](AGENTS.md)、[`skills/gx3gen-plc/`](skills/gx3gen-plc/)、[`run_mcp.py`](run_mcp.py) | MCP server（13 个工具）+ 技能包 + agent 手册，适配任意支持 MCP 的 AI 客户端 |
+| **Agent 接入** | [`AGENTS.md`](AGENTS.md)、[`skills/gx3gen-plc/`](skills/gx3gen-plc/)、[`run_mcp.py`](run_mcp.py) | MCP server（17 个工具）+ 技能包 + agent 手册，适配任意支持 MCP 的 AI 客户端 |
 | **规划层** | [`src/gx3gen/planner/`](src/gx3gen/planner/) | 规则解析 / 领域模板；项目内 LLM 只是**可选独立适配器**（agent 模式不使用） |
 | **质量门槛** | [`src/gx3gen/quality.py`](src/gx3gen/quality.py) | 结构检查 + 需求红线；不合格不生成 |
 | **GX 导入自检** | [`src/gx3gen/audit.py`](src/gx3gen/audit.py)、[`tools/gx_audit.py`](tools/gx_audit.py) | 生成后/导入前检查 BOM、行尾、操作数个数、IL 序列、STL-RETSTL、注释标题 |
+| **手册知识库** | [`src/gx3gen/manual/`](src/gx3gen/manual/)、[`docs/MANUALS.md`](docs/MANUALS.md) | 官方/用户手册 → 本地 FTS5 索引 → agent 按需查片段（手册/章节/页码）；不把整本 PDF 塞进上下文 |
 | **领域模板** | [`src/gx3gen/domains.py`](src/gx3gen/domains.py) | 内置双向红绿灯（6 相位/6 定时器/自动循环/启停） |
 | **确定性编译器** | [`src/gx3gen/generator/`](src/gx3gen/generator/)、[`src/gx3gen/ilcsv/`](src/gx3gen/ilcsv/) | `ProgramSpec` → 段/STL → IL → 官方 GX CSV（UTF-16LE+BOM、TAB、QUOTE_ALL、CRLF、7 列、END） |
 | **风格学习** | [`src/gx3gen/style/`](src/gx3gen/style/) | 从你 GX 导出的程序/注释 CSV 学段结构、步号段、模式位、报警基址、握手命名 |
@@ -57,7 +58,7 @@
 ```bash
 git clone https://github.com/mlwei1/liu-ai-gxworks3.git
 cd liu-ai-gxworks3
-python -m unittest discover -s tests -t .     # 162 个测试，无网络
+python -m unittest discover -s tests -t .     # 167 个测试，无网络
 ```
 
 ### A. AI Agent + MCP（推荐）
@@ -98,6 +99,7 @@ MCP 工具：
 | `gx3gen_validate_spec` | 结构校验 + 质量门槛 |
 | `gx3gen_generate_program` | 生成 4 个产物（程序 CSV、注释 CSV、网络表、报告），并自动做 GX 导入自检 |
 | `gx3gen_audit_csv` | 导入前自检（格式/操作数/IL/STL/注释标题），可复核外部 CSV |
+| `gx3gen_manual_list/toc/search/read` | 手册知识库：先查目录/检索片段，再按需读章节；不把整本 PDF 塞进上下文 |
 | `gx3gen_create_project` / `gx3gen_save_spec` / `gx3gen_load_spec` / `gx3gen_list_projects` | 项目与 `spec.json` 文件交接（agent 与 Web 共用 workspace） |
 | `gx3gen_get_examples` | 红绿灯 / 三工位示例 |
 | `gx3gen_list_styles` / `gx3gen_import_style` | 管理从你 GX CSV 学到的风格画像 |
@@ -120,7 +122,25 @@ python run.py style import --program-csv "程序本体.csv" --comment-csv "全�
 > `plan` 默认使用规则/领域模板；`plan --llm` 是可选的非 agent 模式。agent 模式下由 agent 自己产出
 > ProgramSpec，不需要 Key。
 
-### C. 实验性：本地 Web 审阅界面（非主流程）
+### C. 手册知识库（查手册，不读整本 PDF）
+
+```bash
+# 建索引（仅建索引需要可选 PyMuPDF；查询只用标准库）
+python -m pip install -r requirements-manuals.txt
+python run.py manual add --path "docs/官方资料/你的手册.pdf" --model FX5U
+
+# 查
+python run.py manual list
+python run.py manual search "SET 操作数"
+python run.py manual toc <manual_id>
+python run.py manual read <manual_id> --section 1234
+```
+
+- 官方/公司手册不要提交 git（`.gitignore` 已忽略 `docs/官方资料/` 与 `workspace/`）；
+- agent 通过 `gx3gen_manual_list/toc/search/read` 按需查，回答引用 **手册/章节/页码**；
+- 索引/隐私/限制见 [docs/MANUALS.md](docs/MANUALS.md)。
+
+### D. 实验性：本地 Web 审阅界面（非主流程）
 
 > **主流程不需要它，也不需要打开网页。** 这一层仅用于人工审阅/对比/下载/记录反馈；
 > 如果只想走纯对话，可以完全不启动、后续也可以移除。
@@ -199,9 +219,9 @@ python run.py seed-demo      # 创建一个三工位示例项目
 ├── docs/                     # 架构、产品闭环、CSV 格式、agent 工作流、实现状态…
 ├── spec/                     # ProgramSpec / StyleProfile JSON Schema
 ├── samples/                  # 三工位 + 双向红绿灯示例
-├── src/gx3gen/               # Python 包（planner/generator/ilcsv/style/feedback/app/mcp）
+├── src/gx3gen/               # Python 包（planner/generator/ilcsv/style/feedback/manual/app/mcp）
 ├── web/                      # 实验性单页审阅界面（无构建、无 CDN；非主流程）
-├── tests/                    # 162 个 unittest
+├── tests/                    # 167 个 unittest
 └── workspace/                # 运行时数据（项目/风格/产物，已 gitignore）
 ```
 
@@ -209,7 +229,7 @@ python run.py seed-demo      # 创建一个三工位示例项目
 
 ```bash
 python -m unittest discover -s tests -t .
-# Ran 162 tests ... OK
+# Ran 167 tests ... OK
 ```
 
 覆盖：GX CSV 编码/引号/续行/END、ProgramSpec 校验（含 SET/RST 操作数、LD/LDI 序列、注释标题）、
@@ -249,6 +269,7 @@ MCP 协议/工具测试。
 - [docs/FEEDBACK_LOOP.md](docs/FEEDBACK_LOOP.md) — 反馈闭环
 - [docs/INTERFACES.md](docs/INTERFACES.md) — 模块接口
 - [docs/STATUS.md](docs/STATUS.md) — 实现状态
+- [docs/MANUALS.md](docs/MANUALS.md) — 手册知识库（索引/查询/隐私/限制）
 
 ## 协议
 

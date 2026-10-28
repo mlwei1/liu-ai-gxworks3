@@ -43,6 +43,8 @@ SERVER_INSTRUCTIONS = (
     "gx3gen_generate_program（结果含 audit）→ 需要时 gx3gen_audit_csv → "
     "向用户报告产物路径/质量/audit/assumptions。"
     "注意：SET/RST 只能 1 个操作数、LD/LDI 不能连续、一个 STL 配一个 RETSTL、注释 CSV 用 LF。"
+    "需要查手册时用 gx3gen_manual_list → gx3gen_manual_search → gx3gen_manual_read，"
+    "只引用命中片段和页码，不要用文件工具整本读 PDF。"
     "同时阅读仓库根 AGENTS.md 与 skills/gx3gen-plc/SKILL.md。"
 )
 
@@ -752,12 +754,36 @@ def _render_generation_context(requirement, io_csv, style_id, project_id):
     lines.append("## 6. 当前 IO 表\n" + _format_io_rows(io_rows))
     lines.append("## 7. 风格摘要\n" + _format_style(style))
     lines.append("## 8. 历史经验（lessons，按反馈自动积累）\n" + _format_lessons(lessons))
+
+    manual_lines = ["## 9. 手册知识库（用来“查”，不要整本读）"]
+    try:
+        from .manual import list_manuals
+
+        manuals = list_manuals()
+        if manuals:
+            manual_lines.append("已索引手册：")
+            for item in manuals[:10]:
+                manual_lines.append("- %s（%s 页，%s）id=%s" % (
+                    item.get("title"), item.get("pages"), item.get("model") or "未标机型",
+                    item.get("id")))
+            manual_lines.append(
+                "需要查指令/设备/错误码时调用 `gx3gen_manual_search({query, model?})`，"
+                "只引用命中片段和页码；需要细节再 `gx3gen_manual_read({manual_id, section_id})`。"
+                "不要用文件读取工具整本读 PDF。")
+        else:
+            manual_lines.append(
+                "还没有索引手册。用户上传 PDF 后运行："
+                "`python run.py manual add --path <手册.pdf>`；查询用 `gx3gen_manual_search`。")
+    except Exception as exc:
+        manual_lines.append("手册库读取失败：%s" % exc)
+    lines.append("\n".join(manual_lines))
+
     lines.append(
-        "## 9. 交付与报告（生成成功后必须这么回复用户）\n"
+        "## 10. 交付与报告（生成成功后必须这么回复用户）\n"
         "1) 生成文件：program.csv（程序本体）/ comments.csv（软元件注释）/ network_table.md / report.md"
         "（用工具返回的绝对或工作区相对路径）；\n"
         "2) 段结构与步号（用返回的 segments/stats）；\n"
-        "3) 质量结果：quality.ok / 错误 / 告警 / lint；不达标时先迭代或明确询问用户；\n"
+        "3) 质量结果：quality.ok / 错误 / 告警 / lint / audit；不达标时先迭代或明确询问用户；\n"
         "4) assumptions 逐条列出（设备、延时、报警、互锁等待现场确认项）；\n"
         "5) GX Works3 落地步骤：打开基座工程副本 → MAIN 程序内 [编辑]→[导入文件] 选 program.csv → "
         "导入软元件注释 → 全部转换（Shift+Alt+F4）→ 修编译错误/补逻辑 → 保存。\n"
@@ -939,6 +965,90 @@ def _tool_audit_csv(arguments):
         "自检通过可继续 GX Works3 导入+全部转换；未通过请按 problems 修 spec/CSV 后重新生成。"
     )
     return _json_result(payload, is_error=not bool(result.get("ok")))
+
+
+# ---------------------------------------------------------------------------
+# 手册知识库（查手册，不把整本 PDF 读进上下文）
+# ---------------------------------------------------------------------------
+def _tool_manual_list(arguments):
+    try:
+        from .manual import list_manuals
+
+        manuals = list_manuals()
+    except Exception as exc:
+        return _fail("手册列表读取失败：%s: %s" % (type(exc).__name__, exc))
+    return _ok(
+        manuals=manuals,
+        count=len(manuals),
+        next_step=("需要查指令/设备/错误码时先 gx3gen_manual_search；"
+                   "回答必须给手册/章节/页码。没有手册时让用户运行 "
+                   "`python run.py manual add --path <手册>`。"),
+    )
+
+
+def _tool_manual_search(arguments):
+    query = _as_str(arguments.get("query")).strip()
+    if not query:
+        raise ToolError("缺少 query：请传要查的指令/设备/错误码/问题关键词")
+    manual_id = _as_str(arguments.get("manual_id")).strip()
+    model = _as_str(arguments.get("model")).strip()
+    try:
+        top_k = int(arguments.get("top_k") or 5)
+    except (TypeError, ValueError):
+        top_k = 5
+    try:
+        from .manual import search
+
+        hits = search(query, manual_id=manual_id or None, model=model or None,
+                      top_k=top_k)
+    except Exception as exc:
+        return _fail("手册检索失败：%s: %s" % (type(exc).__name__, exc))
+    return _ok(
+        query=query,
+        hits=hits,
+        count=len(hits),
+        next_step=("只用命中片段回答；引用格式：手册/章节/页码。"
+                   "需要更多上下文时用 gx3gen_manual_read({manual_id, section_id})。"),
+    )
+
+
+def _tool_manual_toc(arguments):
+    manual_id = _as_str(arguments.get("manual_id")).strip()
+    if not manual_id:
+        raise ToolError("缺少 manual_id；可先调用 gx3gen_manual_list")
+    try:
+        depth = int(arguments.get("depth") or 3)
+    except (TypeError, ValueError):
+        depth = 3
+    try:
+        from .manual import toc
+
+        items = toc(manual_id, depth=depth)
+    except Exception as exc:
+        return _fail("手册目录读取失败：%s: %s" % (type(exc).__name__, exc))
+    return _ok(manual_id=manual_id, items=items, count=len(items))
+
+
+def _tool_manual_read(arguments):
+    manual_id = _as_str(arguments.get("manual_id")).strip()
+    if not manual_id:
+        raise ToolError("缺少 manual_id；可先调用 gx3gen_manual_list")
+    section_id = arguments.get("section_id")
+    page = arguments.get("page")
+    try:
+        max_chars = int(arguments.get("max_chars") or 6000)
+    except (TypeError, ValueError):
+        max_chars = 6000
+    try:
+        from .manual import read
+
+        result = read(manual_id,
+                      section_id=None if section_id is None else int(section_id),
+                      page=None if page is None else int(page),
+                      max_chars=max_chars)
+    except Exception as exc:
+        return _fail("手册阅读失败：%s: %s" % (type(exc).__name__, exc))
+    return _ok(**result)
 
 
 
@@ -1184,6 +1294,10 @@ def _dispatch_tool(name, arguments):
         "gx3gen_validate_spec": _tool_validate_spec,
         "gx3gen_generate_program": _tool_generate_program,
         "gx3gen_audit_csv": _tool_audit_csv,
+        "gx3gen_manual_list": _tool_manual_list,
+        "gx3gen_manual_search": _tool_manual_search,
+        "gx3gen_manual_toc": _tool_manual_toc,
+        "gx3gen_manual_read": _tool_manual_read,
         "gx3gen_create_project": _tool_create_project,
         "gx3gen_save_spec": _tool_save_spec,
         "gx3gen_load_spec": _tool_load_spec,
@@ -1296,6 +1410,59 @@ def _tool_definitions():
                     },
                 },
                 "required": ["program_csv_path"],
+            },
+        },
+        {
+            "name": "gx3gen_manual_list",
+            "description": (
+                "列出手册知识库中已索引的手册（id/标题/页数/机型/版本）。"
+                "手册是“查”的，不要用文件读取工具读整本 PDF；先 list → search → read。"
+            ),
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "gx3gen_manual_search",
+            "description": (
+                "搜索本地手册知识库（SQLite FTS5，中英混合），返回 top-k 片段 + 手册/章节/页码。"
+                "用于查指令语义、设备范围、错误码、模块用法等；默认只取 5 段，避免上下文过大。"
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "检索词/问题，如“SET 操作数”“高速计数器 最大频率”"},
+                    "manual_id": {"type": "string", "description": "限定某本手册（可选）"},
+                    "model": {"type": "string", "description": "限定机型，如 FX5U（可选）"},
+                    "top_k": {"type": "integer", "description": "返回片段数（1–20，默认 5）"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "gx3gen_manual_toc",
+            "description": "返回手册目录（章节层级 + 页码）；先看目录再 read 指定章节。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "manual_id": {"type": "string"},
+                    "depth": {"type": "integer", "description": "目录深度（默认 3）"},
+                },
+                "required": ["manual_id"],
+            },
+        },
+        {
+            "name": "gx3gen_manual_read",
+            "description": (
+                "读取指定章节或页的正文（带出处）；只在 search 命中不足时使用，max_chars 默认 6000。"
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "manual_id": {"type": "string"},
+                    "section_id": {"type": "integer", "description": "章节 id（来自 toc/search）"},
+                    "page": {"type": "integer", "description": "页码（1 起，可选）"},
+                    "max_chars": {"type": "integer", "description": "最多返回字符数（500–20000，默认 6000）"},
+                },
+                "required": ["manual_id"],
             },
         },
         {

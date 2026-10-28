@@ -24,6 +24,10 @@ REQUIRED_TOOLS = {
     "gx3gen_validate_spec",
     "gx3gen_generate_program",
     "gx3gen_audit_csv",
+    "gx3gen_manual_list",
+    "gx3gen_manual_search",
+    "gx3gen_manual_toc",
+    "gx3gen_manual_read",
     "gx3gen_create_project",
     "gx3gen_save_spec",
     "gx3gen_load_spec",
@@ -469,6 +473,13 @@ class McpServerTest(unittest.TestCase):
         audit_payload = _parse_json(audit_text)
         self.assertFalse(audit_result.get("isError"), audit_payload)
         self.assertTrue(audit_payload.get("ok"), audit_payload)
+
+    def test_17f_manual_list_empty_workspace(self):
+        result, text = self.client.call_tool("gx3gen_manual_list", {})
+        payload = _parse_json(text)
+        self.assertFalse(result.get("isError"), payload)
+        self.assertTrue(payload.get("ok"), payload)
+        self.assertEqual(payload.get("manuals"), [])
 
     def test_18_list_styles(self):
         result, text = self.client.call_tool("gx3gen_list_styles", {})

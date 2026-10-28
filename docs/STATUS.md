@@ -1,5 +1,19 @@
 # 实现状态（2026-10-28）
 
+## 新增：本地手册知识库（2026-10-28 晚）
+
+目标：**手册是查的，不是读的**；不把整本 PDF 放进 agent 上下文。
+
+- 新增 `src/gx3gen/manual/`：PDF（可选 PyMuPDF）/MD/TXT/DOCX 提取 → TOC 结构切块 →
+  SQLite + FTS5（中文 bigram）索引 → 检索/目录/章节阅读。
+- 新增 CLI：`python run.py manual add/list/search/toc/read/remove`。
+- MCP 新增 4 个工具：`gx3gen_manual_list/toc/search/read`（当前共 17 个工具）。
+- 生成上下文会提示“手册库是否已索引”，agent 需要查指令/设备/错误码时按需检索并引用页码。
+- 官方/用户手册与索引都不进 git（`.gitignore` 忽略 `docs/官方资料/`、`workspace/`）；
+  建索引用 `requirements-manuals.txt`（pymupdf），查询只用标准库。
+- 已本地索引 5 本 FX5 手册（约 2,826 页），用于验证检索；全仓 **167 tests OK**。
+- 详细说明：[docs/MANUALS.md](MANUALS.md)。
+
 ## 最新修正：真实 GX Works3 导入排障回归（2026-10-28 晚）
 
 真实项目（压装测试台，FX5U）三次导入失败后定位并修复 4 个独立根因；最终版本
@@ -16,7 +30,7 @@
 新增：
 - `src/gx3gen/audit.py` + `tools/gx_audit.py` + `python run.py audit`：导入前自检（格式/操作数/IL/STL/注释）；
 - 生成器自动跑 audit，结果写入生成结果 `audit` 与 `report.md`；MCP 新增 `gx3gen_audit_csv`；
-- 回归测试覆盖上述规则；全仓 **162 tests OK**。
+- 回归测试覆盖上述规则；全仓 **167 tests OK**。
 
 ## 修正：纯对话优先（2026-10-28 晚）
 
@@ -27,7 +41,7 @@
 - AGENTS.md 明确：**不要要求用户打开 Web 界面、不要索要 API Key**；项目可用 `create_project`/`save_spec` 持久化；
 - Web 首页加"实验性/可选审阅界面"提示，并补 `web/README.md` 说明；
 - 架构/接口/AGENT_WORKFLOW 文档同步标注 app/ 层为实验性可选；
-- 代码生成/质量/测试逻辑未改，仍为 **162 tests OK**。
+- 代码生成/质量/测试逻辑未改，仍为 **167 tests OK**。
 
 ## 修正：agent 是唯一 LLM（2026-10-28 下午）
 
@@ -40,7 +54,7 @@
 - Web 界面重新定位为**审阅/可视化/反馈/风格/产物浏览**；「本地 LLM」降级为可选独立模式，设置项默认折叠。
 - README（中/英）、AGENTS.md、技能包、架构/接口文档统一改为"**不需要 API Key**"的主流程；
   `planner/llm.py` 明确标记为可选 standalone 适配器（非 agent 模式/CI）。
-- 新增 MCP 测试：项目/spec 文件交接、工具集不含项目内规划器、上下文不要求 API Key；全仓 **162 tests OK**。
+- 新增 MCP 测试：项目/spec 文件交接、工具集不含项目内规划器、上下文不要求 API Key；全仓 **167 tests OK**。
 
 ## 针对"规则生成太弱/没有自动流程"的修复
 
@@ -58,10 +72,11 @@
 
 | 模块 | 文件 | 状态 |
 |---|---|---|
-| AI Agent 接入 | `run_mcp.py`、`src/gx3gen/mcp_server.py`、`AGENTS.md`、`skills/gx3gen-plc/` | ✅ MCP 13 工具：generation_context / validate / generate / audit_csv / create_project / save_spec / load_spec / list_projects / examples / styles / import_style / feedback / lessons（**无项目内 LLM/规划工具**） |
+| AI Agent 接入 | `run_mcp.py`、`src/gx3gen/mcp_server.py`、`AGENTS.md`、`skills/gx3gen-plc/` | ✅ MCP 17 工具：generation_context / validate / generate / audit_csv / manual_list / manual_search / manual_toc / manual_read / create_project / save_spec / load_spec / list_projects / examples / styles / import_style / feedback / lessons（**无项目内 LLM/规划工具**） |
 | 领域模板 | `src/gx3gen/domains.py` | ✅ 双向红绿灯（25/3/2/20/3/2 默认时长；灯位按注释匹配，缺失自动分配 Y0–Y5） |
 | 质量门槛 | `src/gx3gen/quality.py` | ✅ 结构检查 + 需求红线；`generator.generate(requirement=...)` 硬 gate；`force` 可强制 |
 | GX 导入自检 | `src/gx3gen/audit.py`、`tools/gx_audit.py` | ✅ 格式/操作数/IL/STL/注释标题；生成器自动调用，MCP/CLI 可复核 |
+| 手册知识库 | `src/gx3gen/manual/` | ✅ PDF/MD/TXT/DOCX → SQLite FTS5；检索/目录/阅读带页码；CLI + 4 个 MCP 工具；手册与索引不进 git |
 | 实验性 Web 审阅界面 | `src/gx3gen/app/`、`web/` | ⚗️ 非主流程：审阅/可视化/反馈/产物浏览；「本地 LLM」为可选独立模式（agent 模式不需要） |
 | ProgramSpec 契约 | `src/gx3gen/spec.py`、`spec/program_spec.schema.json` | ✅ 校验（含 SET/RST 操作数、LD/LDI 序列、comment_title）、IO 表解析、设备查找 |
 | 生成器 | `src/gx3gen/generator/` | ✅ spec → 段/STL → IL → CSV/注释/网络表/报告/轻量检查/audit |
@@ -69,16 +84,19 @@
 | 风格学习 | `src/gx3gen/style/` | ✅ GX CSV → StyleProfile；真实语料 6 组验证 |
 | 规划器 | `src/gx3gen/planner/` | ✅ 规则解析 / 领域模板；`planner/llm.py` 为**可选 standalone 适配器**（agent 模式不使用） |
 | 反馈闭环 | `src/gx3gen/feedback/` | ✅ 反馈记录 → lessons/checklist/prompt_hint → 重新规划 |
-| CLI | `src/gx3gen/cli.py`、`run.py` | ✅ serve/gen/plan/lint/style/project/feedback/optimize/demo/seed-demo |
+| CLI | `src/gx3gen/cli.py`、`run.py` | ✅ serve/gen/plan/lint/audit/manual/style/project/feedback/optimize/demo/seed-demo |
 
 ## 已独立验证
 
-- `python -m unittest discover -s tests -t .` → **162 tests OK**（含 MCP 协议/工具测试、GX 导入规则回归、8 个领域/质量测试）。
+- `python -m unittest discover -s tests -t .` → **167 tests OK**（含 MCP 协议/工具测试、GX 导入规则回归、8 个领域/质量测试）。
 - **双向红绿灯（规则/领域模板，无 agent、无任何模型配置）**：
   输入 `samples/traffic_light.requirement.md` + IO 表 →
   `3 段 / 28 网络 / 92 指令 / 约 261 步`，含 6 个 STL 相位、6 个定时器（K250/K30/K20/K200/K30/K20）、
   每个 STL 步块一个 RETSTL、启动停止段、末步回到 S10 的自动循环；`quality.ok=true`、`audit.ok=true`；
   程序本体 CSV 为 UTF-16LE+BOM、CRLF；注释 CSV 为 LF、标题 `Chinese Simplified/简体中文`。
+- **手册知识库**：本地索引 5 本 FX5 手册（约 2,826 页 / 5,632 片段）后，
+  `manual search "ZRST"` 命中 `p.307` 数据批量复位、`SET` 命中指令参考页、`电源规格` 命中硬件篇 p.75；
+  合成文本测试覆盖索引/检索/目录/阅读/删除/去重。已知限制：部分 PDF 图形/表格文本层会乱码，需后续 OCR。
 - **真实 GX Works3 导入（2026-10-28）**：压装测试台项目最终版 `program.csv` + `comments.csv`
   在 GX Works3 1.082 导入成功；此前三轮失败根因均已固化为 `spec.py`/`ilcsv`/`generator` 校验与回归测试。
 - **GX 导入自检**：历史版本回归——`173031` 检出 9 项、`174039` 5 项、`174921` 1 项、最终版 0 项；
