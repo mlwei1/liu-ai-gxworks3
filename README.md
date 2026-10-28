@@ -10,6 +10,7 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#环境要求)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#测试)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7b61ff.svg)](run_mcp.py)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **推荐用法：下载/克隆本仓库 → 用 AI agent（Claude Code / DeepSeek Harness / Cursor / Codex…）打开 →
 把 agent 连到内置 MCP server → agent 自己写 `ProgramSpec`、校验、生成 CSV 并汇报结果。
@@ -212,3 +213,10 @@ python -m unittest discover -s tests -t .
 - [docs/FEEDBACK_LOOP.md](docs/FEEDBACK_LOOP.md) — 反馈闭环
 - [docs/INTERFACES.md](docs/INTERFACES.md) — 模块接口
 - [docs/STATUS.md](docs/STATUS.md) — 实现状态
+
+## 协议
+
+本项目采用 **MIT License**，详见 [LICENSE](LICENSE)。
+
+Copyright (c) 2026 mlwei1
+

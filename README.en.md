@@ -11,6 +11,7 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#requirements)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#tests)
 [![MCP](https://img.shields.io/badge/MCP-stdio-7b61ff.svg)](run_mcp.py)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Recommended way to use it:** clone/download this repository → open it with an AI agent
 (Claude Code / DeepSeek Harness / Cursor / Codex …) → connect the agent to the bundled MCP server →
@@ -214,3 +215,10 @@ HTTP API, and 28 MCP protocol/tool tests.
 - [docs/FEEDBACK_LOOP.md](docs/FEEDBACK_LOOP.md) — feedback loop
 - [docs/INTERFACES.md](docs/INTERFACES.md) — module interfaces
 - [docs/STATUS.md](docs/STATUS.md) — implementation status
+
+## License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE).
+
+Copyright (c) 2026 mlwei1
+
